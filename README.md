@@ -153,13 +153,38 @@ Heartbeat mode takes this further — agents autonomously gather context from th
 
 ### Workflows
 
-Multi-step executions with real-time progress and human-in-the-loop approval.
+Multi-step executions with real-time progress and human-in-the-loop approval. Each agent runs on its own model — so your coding agent (Claude, GPT) can orchestrate workflows that execute on completely different LLMs.
 
 ```php
+// Create agents on different models
+$researcher = $iris->agents->create(new AgentConfig(
+    name: 'Researcher',
+    prompt: 'Deep research and analysis',
+    model: 'claude-3-5-sonnet',       // Anthropic
+));
+
+$writer = $iris->agents->create(new AgentConfig(
+    name: 'Content Writer',
+    prompt: 'Write compelling copy from research',
+    model: 'gpt-4o',                  // OpenAI
+));
+
+$reviewer = $iris->agents->create(new AgentConfig(
+    name: 'QA Reviewer',
+    prompt: 'Review content for accuracy',
+    model: 'gemini-pro',              // Google
+));
+
+// Execute a workflow — the agent uses its configured model
 $workflow = $iris->workflows->execute([
-    'agent_id' => 11,
+    'agent_id' => $researcher->id,
     'query' => 'Research competitors and create a comparison report',
 ]);
+
+// Or override the model per-chat for quick experiments
+$response = $iris->agents->chat($researcher->id, [
+    ['role' => 'user', 'content' => 'Summarize our Q4 pipeline']
+], ['model' => 'gpt-5-nano']);        // Override just for this call
 
 // Poll progress
 $status = $iris->workflows->getStatus($workflow->id);
@@ -172,6 +197,15 @@ if ($status->needsHumanInput()) {
     ]);
 }
 ```
+
+```bash
+# From the CLI — same model flexibility
+iris agent:create --name="Analyst" --model=claude-3-5-sonnet --prompt="Financial analysis"
+iris chat 11 "Draft a report" --model=gpt-5-nano
+iris sdk:call workflows.execute agent_id=11 query="Research competitors"
+```
+
+Your coding agent sits in Claude Code. It calls the IRIS CLI. The CLI triggers a workflow on a GPT-4o agent. That agent uses Gemini for a sub-task. Four different LLMs, one pipeline, zero config friction.
 
 ### Leads (CRM)
 
