@@ -62,6 +62,12 @@ The CLI mirrors the full SDK. Every resource, every method — accessible from y
 # Search leads
 ./bin/iris sdk:call leads.search search=acme status=Won
 
+# Scrape Instagram comments → create leads on a board
+./bin/iris leads:scrape --url=https://www.instagram.com/p/ABC123/ --board=42 --limit=100
+
+# Import pre-scraped usernames as leads
+./bin/iris leads:discover @user1,@user2 --board=42 --enrich
+
 # Trigger a workflow
 ./bin/iris sdk:call workflows.execute agent_id=11 query="Research competitors"
 
@@ -151,6 +157,29 @@ $iris->leads->deliverables(412)->create([
 ]);
 ```
 
+### Lead Discovery (Instagram Scraper)
+
+Scrape Instagram post comments or profile followers and create leads directly on a board.
+
+```bash
+# Scrape comments from a post → create leads on board 42
+iris leads:scrape --url=https://www.instagram.com/p/DOgSXrCju2y/ --board=42
+
+# With options: limit, dry run, enrichment, browser visible
+iris leads:scrape -u https://www.instagram.com/p/DOgSXrCju2y/ -b 42 -l 100 --headed
+iris leads:scrape -u https://www.instagram.com/p/DOgSXrCju2y/ -b 42 --dry-run
+iris leads:scrape -u https://www.instagram.com/p/DOgSXrCju2y/ -b 42 --enrich
+
+# Scrape followers instead of comments
+iris leads:scrape -u https://www.instagram.com/bravowwhl/ -b 42 --mode=followers
+
+# Import pre-scraped usernames
+iris leads:discover @user1,@user2,@user3 --board=42
+iris leads:discover ./profiles.txt --board=42 --enrich
+```
+
+Each lead gets: `@username` as name, comment text, ISO timestamp, and discovery source as custom fields. Supports batched API calls, crash recovery, and resume (`--resume`).
+
 ### Knowledge Base (RAG)
 
 Vector-indexed knowledge. Upload files, index content, semantic search. OpenAI embeddings + Pinecone.
@@ -190,33 +219,33 @@ $iris->integrations->execute('google-drive', 'search_files', [
 
 ## All resources
 
-| Resource | What it does |
-|----------|-------------|
-| `$iris->agents` | Create, chat, schedule, monitor AI agents |
-| `$iris->workflows` | Multi-step execution with human-in-the-loop |
-| `$iris->leads` | CRM — contacts, tasks, notes, invoices, outreach |
-| `$iris->bloqs` | Knowledge bases — lists, items, documents |
-| `$iris->chat` | Real-time conversations with progress tracking |
-| `$iris->rag` | Vector search, semantic retrieval, file indexing |
-| `$iris->integrations` | 50+ service connections, OAuth, function execution |
-| `$iris->courses` | LMS — courses, chapters, progress, enrollment |
-| `$iris->voice` | Voice AI configuration (ElevenLabs, Google TTS) |
-| `$iris->phone` | Phone numbers for voice agents (VAPI, Twilio) |
-| `$iris->tools` | Recruitment, data enrichment, newsletter research |
-| `$iris->articles` | Generate articles from videos, topics, transcripts |
-| `$iris->audio` | Merge, crossfade, convert audio (FFMPEG) |
-| `$iris->social` | Publish to Instagram, TikTok, X, LinkedIn |
-| `$iris->payments` | Agent wallets, transactions, billing |
-| `$iris->products` | E-commerce catalog, variants, inventory |
-| `$iris->pages` | Composable landing pages |
-| `$iris->programs` | Membership programs, funnels, enrollment |
-| `$iris->marketplace` | Browse and install reusable agent skills |
-| `$iris->automations` | V6 goal-driven agentic automations |
-| `$iris->users` | Account management |
-| `$iris->profiles` | User profiles, media library |
-| `$iris->services` | Service offerings and pricing |
-| `$iris->usage` | Token usage, cost tracking, rate limits |
-| `$iris->models` | Available AI models and capabilities |
+| Resource | CLI | What it does |
+|----------|-----|-------------|
+| `$iris->agents` | `iris agent:create`, `iris chat` | Create, chat, schedule, monitor AI agents |
+| `$iris->workflows` | `iris sdk:call workflows.*` | Multi-step execution with human-in-the-loop |
+| `$iris->leads` | `iris leads:scrape`, `iris leads:discover` | CRM — contacts, tasks, notes, invoices, outreach |
+| `$iris->bloqs` | `iris bloq:ingest`, `iris bloq:ingestion-status` | Knowledge bases — lists, items, documents |
+| `$iris->chat` | `iris chat`, `iris v6:chat` | Real-time conversations with progress tracking |
+| `$iris->rag` | `iris sdk:call rag.*` | Vector search, semantic retrieval, file indexing |
+| `$iris->integrations` | `iris integrations` | 50+ service connections, OAuth, function execution |
+| `$iris->courses` | `iris sdk:call courses.*` | LMS — courses, chapters, progress, enrollment |
+| `$iris->voice` | `iris voice` | Voice AI configuration (ElevenLabs, Google TTS) |
+| `$iris->phone` | `iris phone` | Phone numbers for voice agents (VAPI, Twilio) |
+| `$iris->tools` | `iris tools` | Recruitment, data enrichment, newsletter research |
+| `$iris->articles` | `iris sdk:call articles.*` | Generate articles from videos, topics, transcripts |
+| `$iris->audio` | `iris sdk:call audio.*` | Merge, crossfade, convert audio (FFMPEG) |
+| `$iris->social` | `iris sdk:call social.*` | Publish to Instagram, TikTok, X, LinkedIn |
+| `$iris->payments` | `iris payments`, `iris wallet` | Agent wallets, transactions, billing |
+| `$iris->products` | `iris sdk:call products.*` | E-commerce catalog, variants, inventory |
+| `$iris->pages` | `iris pages` | Composable landing pages |
+| `$iris->programs` | `iris sdk:call programs.*` | Membership programs, funnels, enrollment |
+| `$iris->marketplace` | `iris marketplace` | Browse and install reusable agent skills |
+| `$iris->automations` | `iris automation` | V6 goal-driven agentic automations |
+| `$iris->users` | `iris users` | Account management |
+| `$iris->profiles` | `iris profile` | User profiles, media library |
+| `$iris->services` | `iris sdk:call services.*` | Service offerings and pricing |
+| `$iris->usage` | `iris sdk:call usage.*` | Token usage, cost tracking, rate limits |
+| `$iris->models` | `iris sdk:call models.*` | Available AI models and capabilities |
 
 ---
 
