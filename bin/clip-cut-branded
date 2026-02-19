@@ -1,0 +1,309 @@
+#!/usr/bin/env php
+<?php
+/**
+ * Branded Clip Cutter CLI
+ * 
+ * Cut video clips with custom branding (logo, audio drop, intro/outro)
+ * Uses the enhanced FFMPEGService with custom branding support.
+ * 
+ * Usage:
+ *   ./bin/clip-cut-branded \
+ *     --video="/path/to/video.mp4" \
+ *     --start=75 \
+ *     --duration=30 \
+ *     --output="branded_clip.mp4" \
+ *     --custom-logo="/storage/brands/emc/logo.png" \
+ *     --logo-position="bottom-right" \
+ *     --custom-audio="/storage/brands/emc/sting.mp3" \
+ *     --intro="/storage/brands/emc/intro.mp4" \
+ *     --outro="/storage/brands/emc/outro.mp4"
+ */
+
+// Find composer autoload
+foreach ([__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $file) {
+    if (file_exists($file)) {
+        require $file;
+        break;
+    }
+}
+
+use IRIS\SDK\IRIS;
+use IRIS\SDK\Config;
+
+// Parse command line arguments
+$options = getopt('', [
+    'video:',
+    'start:',
+    'duration:',
+    'output:',
+    'custom-logo::',
+    'logo-position::',
+    'logo-size::',
+    'logo-opacity::',
+    'logo-padding::',
+    'custom-audio::',
+    'audio-drop-enabled::',
+    'intro::',
+    'outro::',
+    'transition-type::',
+    'transition-duration::',
+    'video-quality::',
+    'max-bitrate::',
+    'help',
+    'json',
+    'api-url::',
+    'api-key::',
+    'user-id::',
+]);
+
+// Show help
+if (isset($options['help']) || empty($options)) {
+    echo <<<'HELP'
+
+╔════════════════════════════════════════════════════════════════════╗
+║            Branded Video Clip Cutter - IRIS SDK                    ║
+╚════════════════════════════════════════════════════════════════════╝
+
+Cut video clips with custom branding (logo, audio drop, intro/outro)
+
+USAGE:
+  ./bin/clip-cut-branded --video=INPUT --start=N --duration=N --output=OUTPUT [OPTIONS]
+
+REQUIRED ARGUMENTS:
+  --video=PATH            Input video file path
+  --start=SECONDS         Clip start time in seconds
+  --duration=SECONDS      Clip duration in seconds
+  --output=PATH           Output file path
+
+CUSTOM BRANDING OPTIONS:
+  --custom-logo=PATH              Custom logo watermark (PNG recommended)
+  --logo-position=POSITION        Logo position: top-left, top-right, bottom-left,
+                                  bottom-right, center (default: top-left)
+  --logo-size=PIXELS              Logo width in pixels (default: 240)
+  --logo-opacity=FLOAT            Logo opacity 0.0-1.0 (default: 1.0)
+  --logo-padding=PIXELS           Padding from edges (default: 40)
+  
+  --custom-audio=PATH             Custom audio drop/sting (MP3/WAV)
+  --audio-drop-enabled=BOOL       Enable/disable audio drop (default: true)
+  
+  --intro=PATH                    Intro video (will be prepended)
+  --outro=PATH                    Outro video (will be appended)
+  --transition-type=TYPE          Transition: cut, fade, dissolve (default: fade)
+  --transition-duration=SECONDS   Transition duration (default: 0.5)
+
+VIDEO QUALITY OPTIONS:
+  --video-quality=QUALITY         Quality preset: high, medium, low (default: medium)
+  --max-bitrate=BITRATE           Max bitrate in Mbps (e.g., 2.4)
+
+OTHER OPTIONS:
+  --json                          Output as JSON
+  --help                          Show this help message
+
+EXAMPLES:
+
+  # Basic branded clip with logo only
+  ./bin/clip-cut-branded \
+    --video="/path/to/video.mp4" \
+    --start=75 \
+    --duration=30 \
+    --output="branded.mp4" \
+    --custom-logo="/storage/brands/emc/logo.png" \
+    --logo-position="bottom-right"
+
+  # Full branding with intro/outro
+  ./bin/clip-cut-branded \
+    --video="/path/to/video.mp4" \
+    --start=0 \
+    --duration=30 \
+    --output="full_branded.mp4" \
+    --custom-logo="/storage/brands/emc/logo.png" \
+    --logo-position="bottom-right" \
+    --custom-audio="/storage/brands/emc/sting.mp3" \
+    --intro="/storage/brands/emc/intro-3s.mp4" \
+    --outro="/storage/brands/emc/outro-5s.mp4" \
+    --transition-type="fade"
+
+  # No audio drop, custom logo only
+  ./bin/clip-cut-branded \
+    --video="/path/to/video.mp4" \
+    --start=120 \
+    --duration=60 \
+    --output="silent_branded.mp4" \
+    --custom-logo="/storage/brands/emc/logo.png" \
+    --audio-drop-enabled=false
+
+HELP;
+    exit(0);
+}
+
+// Validate required parameters
+$required = ['video', 'start', 'duration', 'output'];
+$missing = [];
+foreach ($required as $param) {
+    if (!isset($options[$param])) {
+        $missing[] = "--{$param}";
+    }
+}
+
+if (!empty($missing)) {
+    echo "❌ Missing required parameters: " . implode(', ', $missing) . "\n";
+    echo "Run with --help for usage information.\n";
+    exit(1);
+}
+
+// Initialize IRIS SDK
+try {
+    $configOptions = [];
+    if (isset($options['api-key'])) {
+        $configOptions['api_key'] = $options['api-key'];
+    }
+    if (isset($options['api-url'])) {
+        $configOptions['api_url'] = $options['api-url'];
+    }
+    if (isset($options['user-id'])) {
+        $configOptions['user_id'] = (int) $options['user-id'];
+    }
+    
+    $iris = new IRIS($configOptions);
+    
+} catch (\Exception $e) {
+    echo "❌ Failed to initialize IRIS SDK: {$e->getMessage()}\n";
+    exit(1);
+}
+
+// Verify input file exists
+if (!file_exists($options['video'])) {
+    echo "❌ Video file not found: {$options['video']}\n";
+    exit(1);
+}
+
+// Build API request parameters
+$params = [
+    'video_file' => $options['video'],
+    'output_file' => $options['output'],
+    'clip_start' => (int) $options['start'],
+    'clip_duration' => (int) $options['duration'],
+];
+
+// Add custom logo options if provided
+if (isset($options['custom-logo'])) {
+    $params['custom_logo'] = $options['custom-logo'];
+    if (!file_exists($params['custom_logo'])) {
+        echo "⚠️  Warning: Custom logo not found: {$params['custom_logo']}\n";
+    }
+}
+if (isset($options['logo-position'])) {
+    $params['logo_position'] = $options['logo-position'];
+}
+if (isset($options['logo-size'])) {
+    $params['logo_size'] = (int) $options['logo-size'];
+}
+if (isset($options['logo-opacity'])) {
+    $params['logo_opacity'] = (float) $options['logo-opacity'];
+}
+if (isset($options['logo-padding'])) {
+    $params['logo_padding'] = (int) $options['logo-padding'];
+}
+
+// Add custom audio options if provided
+if (isset($options['custom-audio'])) {
+    $params['custom_audio_drop'] = $options['custom-audio'];
+    if (!file_exists($params['custom_audio_drop'])) {
+        echo "⚠️  Warning: Custom audio not found: {$params['custom_audio_drop']}\n";
+    }
+}
+if (isset($options['audio-drop-enabled'])) {
+    $params['audio_drop_enabled'] = filter_var($options['audio-drop-enabled'], FILTER_VALIDATE_BOOLEAN);
+}
+
+// Add intro/outro options if provided
+if (isset($options['intro'])) {
+    $params['intro_video'] = $options['intro'];
+    if (!file_exists($params['intro_video'])) {
+        echo "⚠️  Warning: Intro video not found: {$params['intro_video']}\n";
+    }
+}
+if (isset($options['outro'])) {
+    $params['outro_video'] = $options['outro'];
+    if (!file_exists($params['outro_video'])) {
+        echo "⚠️  Warning: Outro video not found: {$params['outro_video']}\n";
+    }
+}
+if (isset($options['transition-type'])) {
+    $params['transition_type'] = $options['transition-type'];
+}
+if (isset($options['transition-duration'])) {
+    $params['transition_duration'] = (float) $options['transition-duration'];
+}
+
+// Add quality options if provided
+if (isset($options['video-quality'])) {
+    $params['video_quality'] = $options['video-quality'];
+}
+if (isset($options['max-bitrate'])) {
+    $params['max_bitrate'] = (float) $options['max-bitrate'];
+}
+
+// Display operation summary
+if (!isset($options['json'])) {
+    echo "\n";
+    echo "╔════════════════════════════════════════════════════════════════╗\n";
+    echo "║         Creating Branded Video Clip                            ║\n";
+    echo "╚════════════════════════════════════════════════════════════════╝\n";
+    echo "\n";
+    echo "📹 Input:     {$options['video']}\n";
+    echo "⏱️  Start:     {$options['start']}s\n";
+    echo "⏰ Duration:  {$options['duration']}s\n";
+    echo "💾 Output:    {$options['output']}\n";
+    echo "\n";
+    echo "🎨 Branding:\n";
+    echo "   Logo:      " . (isset($params['custom_logo']) ? $params['custom_logo'] : 'Default FREELABEL logo') . "\n";
+    echo "   Position:  " . (isset($params['logo_position']) ? $params['logo_position'] : 'top-left') . "\n";
+    echo "   Audio:     " . (isset($params['custom_audio_drop']) ? $params['custom_audio_drop'] : 'Default radio drop') . "\n";
+    echo "   Intro:     " . (isset($params['intro_video']) ? $params['intro_video'] : 'None') . "\n";
+    echo "   Outro:     " . (isset($params['outro_video']) ? $params['outro_video'] : 'None') . "\n";
+    echo "\n";
+    echo "⏳ Processing...\n";
+    echo "\n";
+}
+
+// Call API
+try {
+    $startTime = microtime(true);
+    
+    // Make API request to /api/v1/video/clip-branded
+    $response = $iris->client->post('/api/v1/video/clip-branded', $params);
+    
+    $elapsed = round(microtime(true) - $startTime, 2);
+    
+    // Handle JSON output
+    if (isset($options['json'])) {
+        echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+        exit($response['success'] ? 0 : 1);
+    }
+    
+    // Handle formatted output
+    if (isset($response['success']) && $response['success']) {
+        echo "✅ Branded clip created successfully!\n";
+        echo "\n";
+        echo "📄 File:      {$response['data']['output_file']}\n";
+        echo "📦 Size:      {$response['data']['file_size_mb']} MB\n";
+        echo "⏱️  Time:      {$elapsed}s\n";
+        echo "\n";
+        exit(0);
+    } else {
+        echo "❌ Failed to create branded clip\n";
+        if (isset($response['message'])) {
+            echo "Error: {$response['message']}\n";
+        }
+        exit(1);
+    }
+    
+} catch (\Exception $e) {
+    if (isset($options['json'])) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()], JSON_PRETTY_PRINT) . "\n";
+    } else {
+        echo "❌ Error: {$e->getMessage()}\n";
+    }
+    exit(1);
+}

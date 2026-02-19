@@ -1,0 +1,224 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * IRIS Smart Lead Search
+ * 
+ * A robust search tool that finds leads by:
+ * - Name (full, partial, first, last)
+ * - Email address
+ * - Company name
+ * - Instagram handle (@username)
+ * - Phone number
+ * - Custom fields
+ * - Notes content
+ * 
+ * Usage:
+ *   iris-smart-search "john ayala"
+ *   iris-smart-search "@gniice_"
+ *   iris-smart-search "rodney.mayo@icloud.com"
+ *   iris-smart-search "NCMA"
+ */
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use IRIS\SDK\IRIS;
+use Dotenv\Dotenv;
+
+// Load environment
+$dotenv = Dotenv::createImmutable(__DIR__ . '/..');
+$dotenv->load();
+
+// Get search query
+$query = $argv[1] ?? null;
+
+if (!$query) {
+    echo "\n❌ Usage: iris-smart-search <query>\n\n";
+    echo "Examples:\n";
+    echo "  iris-smart-search \"john ayala\"\n";
+    echo "  iris-smart-search \"@gniice_\"\n";
+    echo "  iris-smart-search \"rodney.mayo@icloud.com\"\n";
+    echo "  iris-smart-search \"NCMA\"\n\n";
+    exit(1);
+}
+
+// Initialize SDK
+$iris = new IRIS([
+    'api_key' => $_ENV['IRIS_API_KEY'],
+    'user_id' => (int) $_ENV['IRIS_USER_ID'],
+]);
+
+echo "\n🔍 Smart Search: \"$query\"\n";
+echo str_repeat('=', 80) . "\n\n";
+
+// Normalize query
+$normalizedQuery = trim($query);
+$isEmail = filter_var($normalizedQuery, FILTER_VALIDATE_EMAIL);
+$isInstagram = str_starts_with($normalizedQuery, '@');
+$hasSpace = str_contains($normalizedQuery, ' ');
+
+// Strategy 1: Direct API search
+echo "📡 Searching via API...\n";
+try {
+    $apiResults = $iris->leads->search(['q' => $normalizedQuery]);
+    echo "   Found " . count($apiResults) . " results from API\n\n";
+} catch (\Exception $e) {
+    echo "   ⚠️  API search failed: " . $e->getMessage() . "\n\n";
+    $apiResults = [];
+}
+
+// Strategy 2: List all and filter locally (for custom fields, etc.)
+echo "🔎 Deep searching in all fields...\n";
+try {
+    $allLeads = $iris->leads->list();
+    echo "   Scanning " . count($allLeads) . " leads...\n";
+    
+    $deepResults = [];
+    foreach ($allLeads as $lead) {
+        // Convert object to array if needed
+        if (is_object($lead)) {
+            $lead = json_decode(json_encode($lead), true);
+        }
+        
+        $matched = false;
+        $matchReasons = [];
+        
+        // Match on name
+        if (!empty($lead['name']) && stripos($lead['name'], $normalizedQuery) !== false) {
+            $matched = true;
+            $matchReasons[] = 'name';
+        }
+        
+        // Match on email
+        if (!empty($lead['email']) && stripos($lead['email'], $normalizedQuery) !== false) {
+            $matched = true;
+            $matchReasons[] = 'email';
+        }
+        
+        // Match on company
+        if (!empty($lead['company']) && stripos($lead['company'], $normalizedQuery) !== false) {
+            $matched = true;
+            $matchReasons[] = 'company';
+        }
+        
+        // Match on nickname
+        if (!empty($lead['nickname']) && stripos($lead['nickname'], $normalizedQuery) !== false) {
+            $matched = true;
+            $matchReasons[] = 'nickname';
+        }
+        
+        // Match on custom fields (Instagram, etc.)
+        if (!empty($lead['custom_fields'])) {
+            foreach ($lead['custom_fields'] as $fieldName => $fieldValue) {
+                if (is_string($fieldValue) && stripos($fieldValue, $normalizedQuery) !== false) {
+                    $matched = true;
+                    $matchReasons[] = "custom_field:$fieldName";
+                }
+            }
+        }
+        
+        // Match on phone
+        if (!empty($lead['phone']) && stripos($lead['phone'], $normalizedQuery) !== false) {
+            $matched = true;
+            $matchReasons[] = 'phone';
+        }
+        
+        // Match on keywords
+        if (!empty($lead['keywords'])) {
+            $keywordsJson = json_encode($lead['keywords']);
+            if (stripos($keywordsJson, $normalizedQuery) !== false) {
+                $matched = true;
+                $matchReasons[] = 'keywords';
+            }
+        }
+        
+        if ($matched) {
+            $lead['_match_reasons'] = $matchReasons;
+            $deepResults[] = $lead;
+        }
+    }
+    
+    echo "   Found " . count($deepResults) . " matches\n\n";
+} catch (\Exception $e) {
+    echo "   ⚠️  Deep search failed: " . $e->getMessage() . "\n\n";
+    $deepResults = [];
+}
+
+// Combine and deduplicate results
+$allResults = [];
+$seenIds = [];
+
+foreach (array_merge($apiResults, $deepResults) as $lead) {
+    // Convert object to array if needed
+    if (is_object($lead)) {
+        $lead = json_decode(json_encode($lead), true);
+    }
+    
+    if (!in_array($lead['id'], $seenIds)) {
+        $allResults[] = $lead;
+        $seenIds[] = $lead['id'];
+    }
+}
+
+// Display results
+if (empty($allResults)) {
+    echo "❌ No leads found matching \"$query\"\n\n";
+    echo "💡 Tips:\n";
+    echo "   • Try searching with fewer characters\n";
+    echo "   • Search by email, company, or Instagram handle\n";
+    echo "   • Check if the lead exists in production\n\n";
+    exit(0);
+}
+
+echo "✅ Found " . count($allResults) . " lead(s):\n";
+echo str_repeat('─', 80) . "\n\n";
+
+foreach ($allResults as $i => $lead) {
+    echo ($i + 1) . ". Lead ID: {$lead['id']}\n";
+    echo "   Name: " . ($lead['name'] ?? 'N/A') . "\n";
+    echo "   Nickname: " . ($lead['nickname'] ?? 'N/A') . "\n";
+    echo "   Email: " . ($lead['email'] ?? 'N/A') . "\n";
+    echo "   Company: " . ($lead['company'] ?? 'N/A') . "\n";
+    echo "   Phone: " . ($lead['phone'] ?? 'N/A') . "\n";
+    
+    if (!empty($lead['custom_fields'])) {
+        echo "   Custom Fields:\n";
+        foreach ($lead['custom_fields'] as $key => $value) {
+            if (is_string($value)) {
+                echo "      • $key: $value\n";
+            }
+        }
+    }
+    
+    if (!empty($lead['_match_reasons'])) {
+        echo "   Matched on: " . implode(', ', $lead['_match_reasons']) . "\n";
+    }
+    
+    echo "   Status: {$lead['status']}\n";
+    echo "   Created: {$lead['created_at']}\n";
+    echo "\n";
+}
+
+// Show quick actions
+echo str_repeat('═', 80) . "\n";
+echo "💡 Quick Actions:\n\n";
+
+if (count($allResults) === 1) {
+    $lead = $allResults[0];
+    echo "View details:\n";
+    echo "  ./bin/iris sdk:call leads.get {$lead['id']}\n\n";
+    
+    if (!empty($lead['email'])) {
+        echo "Send newsletter:\n";
+        echo "  ./bin/iris tools newsletter-research --topic=\"Your Topic\" --audience=\"{$lead['name']}\" --tone=\"professional\" --newsletter-length=\"standard\"\n\n";
+        
+        echo "Send email:\n";
+        echo "  ./bin/iris sdk:call leads.outreach.sendEmail {$lead['id']} to_email=\"{$lead['email']}\" subject=\"Subject\" body_html=\"<html>...</html>\"\n\n";
+    }
+    
+    echo "View deliverables:\n";
+    echo "  ./bin/iris sdk:call leads.deliverables.list {$lead['id']}\n\n";
+}
+
+echo "Search again:\n";
+echo "  ./bin/iris-smart-search \"different query\"\n\n";

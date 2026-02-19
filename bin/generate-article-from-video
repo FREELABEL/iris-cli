@@ -1,0 +1,185 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * Generate Article from YouTube Video
+ * 
+ * Uses CopyCat AI to transcribe, analyze, and publish a YouTube video as an article.
+ * 
+ * Usage:
+ *   ./bin/generate-article-from-video <youtube_url> [profile_id] [options]
+ * 
+ * Examples:
+ *   ./bin/generate-article-from-video "https://www.youtube.com/watch?v=iL3uDrk-i_E"
+ *   ./bin/generate-article-from-video "https://www.youtube.com/watch?v=iL3uDrk-i_E" 635263 --length=long --style=technical
+ */
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use IRIS\SDK\IRIS;
+use IRIS\SDK\Config;
+
+// Color helpers
+function success($msg) { echo "\033[32m✓ {$msg}\033[0m\n"; }
+function error($msg) { echo "\033[31m✗ {$msg}\033[0m\n"; }
+function info($msg) { echo "\033[36mℹ {$msg}\033[0m\n"; }
+function warning($msg) { echo "\033[33m⚠ {$msg}\033[0m\n"; }
+
+// Parse arguments
+$youtubeUrl = $argv[1] ?? null;
+$profileId = $argv[2] ?? 635263; // Default: FreeLabel
+$articleLength = 'long';
+$articleStyle = 'technical';
+$publishToSocial = false;
+$socialPlatforms = ['x'];
+
+// Parse options
+foreach ($argv as $arg) {
+    if (strpos($arg, '--length=') === 0) {
+        $articleLength = str_replace('--length=', '', $arg);
+    }
+    if (strpos($arg, '--style=') === 0) {
+        $articleStyle = str_replace('--style=', '', $arg);
+    }
+    if (strpos($arg, '--social') === 0) {
+        $publishToSocial = true;
+    }
+    if (strpos($arg, '--platforms=') === 0) {
+        $platforms = str_replace('--platforms=', '', $arg);
+        $socialPlatforms = explode(',', $platforms);
+    }
+}
+
+if (!$youtubeUrl) {
+    error("Missing YouTube URL!");
+    echo "\nUsage:\n";
+    echo "  ./bin/generate-article-from-video <youtube_url> [profile_id] [options]\n\n";
+    echo "Options:\n";
+    echo "  --length=<short|medium|long>     Article length (default: long)\n";
+    echo "  --style=<informative|technical|casual|professional>  Article style (default: technical)\n";
+    echo "  --social                         Publish to social media\n";
+    echo "  --platforms=<x,facebook,etc>     Social platforms (default: x)\n\n";
+    echo "Profile IDs:\n";
+    echo "  635263 - FreeLabel (default)\n";
+    echo "  890795 - MINO Marketing\n";
+    echo "  633213 - Capital Collective\n";
+    echo "  918887 - The Know-It-Alls\n\n";
+    echo "Examples:\n";
+    echo "  ./bin/generate-article-from-video \"https://www.youtube.com/watch?v=iL3uDrk-i_E\"\n";
+    echo "  ./bin/generate-article-from-video \"https://www.youtube.com/watch?v=iL3uDrk-i_E\" 635263 --length=long --style=technical\n";
+    echo "  ./bin/generate-article-from-video \"https://www.youtube.com/watch?v=iL3uDrk-i_E\" 635263 --social --platforms=x,facebook\n\n";
+    exit(1);
+}
+
+// Load config
+info("Initializing IRIS SDK...");
+
+// Initialize IRIS client (auto-loads from .env)
+$iris = new IRIS([]);
+
+// Get config to check environment
+$config = $iris->getConfig();
+$baseUrl = $config->baseUrl;
+$isProduction = strpos($baseUrl, 'heyiris.io') !== false || strpos($baseUrl, 'apiv2.heyiris.io') !== false;
+$environment = $isProduction ? 'PRODUCTION' : 'LOCAL';
+
+if ($isProduction) {
+    warning("⚠️  Running on PRODUCTION environment!");
+    warning("⚠️  Base URL: {$baseUrl}");
+    echo "\n";
+    echo "Are you sure you want to continue? (yes/no): ";
+    $handle = fopen("php://stdin", "r");
+    $line = fgets($handle);
+    fclose($handle);
+    
+    if (trim(strtolower($line)) !== 'yes') {
+        error("Aborted by user.");
+        exit(1);
+    }
+    echo "\n";
+}
+
+info("Environment: {$environment}");
+info("Base URL: {$baseUrl}");
+
+echo "\n";
+info("=== Article Generation Parameters ===");
+info("YouTube URL: {$youtubeUrl}");
+info("Profile ID: {$profileId}");
+info("Article Length: {$articleLength}");
+info("Article Style: {$articleStyle}");
+info("Publish to Social: " . ($publishToSocial ? 'Yes' : 'No'));
+if ($publishToSocial) {
+    info("Social Platforms: " . implode(', ', $socialPlatforms));
+}
+echo "\n";
+
+// Prepare parameters
+$params = [
+    'youtube_url' => $youtubeUrl,
+    'profile_id' => (int) $profileId,
+    'article_length' => $articleLength,
+    'article_style' => $articleStyle,
+    'publish_to_fl' => true,
+    'publish_to_social' => $publishToSocial,
+    'social_platforms' => $socialPlatforms,
+    'user_id' => 193, // Production user ID
+];
+
+try {
+    info("🚀 Dispatching article generation job...");
+    info("This will take 3-5 minutes...");
+    echo "\n";
+    
+    // Use the articles resource directly (no agent required!)
+    $result = $iris->articles->generateFromVideo($params);
+    
+    echo "\n";
+    success("✅ Article generation job dispatched successfully!");
+    echo "\n";
+    
+    // Display results
+    if (isset($result['message']) && strpos($result['message'], 'started') !== false) {
+        $data = $result['data'] ?? $result;
+        info("Queue: " . ($data['queue'] ?? $result['queue'] ?? 'article-generation'));
+        info("Estimated Completion: " . ($data['estimated_completion'] ?? $result['estimated_completion'] ?? '3-5 minutes'));
+        
+        if (isset($data['fl_api_response'])) {
+            echo "\n";
+            info("=== FL API Response ===");
+            echo json_encode($data['fl_api_response'], JSON_PRETTY_PRINT) . "\n";
+        }
+        
+        echo "\n";
+        info("📝 What happens next:");
+        info("1. Video is downloaded and transcribed (1-2 min)");
+        info("2. AI analyzes content and generates article (2-3 min)");
+        info("3. Article is published to Freelabel CMS (30 sec)");
+        
+        if ($publishToSocial) {
+            info("4. Article is published to " . implode(', ', $socialPlatforms));
+        }
+        
+        echo "\n";
+        info("💡 Check your Freelabel CMS for the published article:");
+        if ($isProduction) {
+            info("   https://app.heyiris.io/bloq");
+        } else {
+            info("   http://local.raichu.freelabel.net/bloq");
+        }
+        
+    } else {
+        error("Article generation failed!");
+        echo json_encode($result, JSON_PRETTY_PRINT) . "\n";
+        exit(1);
+    }
+    
+} catch (Exception $e) {
+    error("Exception: " . $e->getMessage());
+    error("Trace: " . $e->getTraceAsString());
+    exit(1);
+}
+
+echo "\n";
+success("Done! 🎉");
+echo "\n";

@@ -1,0 +1,37 @@
+{
+  "name": "@freelabel/iris-sdk-php",
+  "version": "1.0.0",
+  "description": "PHP SDK for IRIS AI Platform",
+  "scripts": {
+    "setup": "php bin/iris setup",
+    "agents": "php bin/iris agents",
+    "chat": "php bin/iris chat",
+    "memory:list": "php bin/iris memory:list",
+    "memory:show": "php bin/iris memory:show",
+    "memory:add": "php bin/iris memory:add",
+    "memory:compose": "php bin/iris memory:compose",
+    "config:show": "php bin/iris config:show",
+    "test": "composer test",
+    "test:unit": "composer test:unit",
+    "test:integration": "composer test:integration",
+    "analyse": "composer analyse",
+    "cs-fix": "composer cs-fix"
+  },
+  "keywords": [
+    "iris",
+    "ai",
+    "sdk",
+    "freelabel",
+    "knowledge-base",
+    "agent"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FREELABEL/iris-cli.git"
+  },
+  "author": "Freelabel",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
