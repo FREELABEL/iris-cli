@@ -82,6 +82,73 @@ This is where it gets interesting: **any AI coding agent that can execute shell 
 
 ---
 
+## Use with Claude Code
+
+IRIS ships as a Claude Code skill. Install it once and Claude Code becomes a full IRIS operator — creating agents, managing leads, running workflows, and querying knowledge bases without you writing a single line of code.
+
+### Install the skill
+
+```bash
+# Clone into your Claude Code skills directory
+cd ~/.claude/skills
+git clone https://github.com/FREELABEL/iris-cli.git
+
+# Or add to an existing project
+mkdir -p .claude/skills && cd .claude/skills
+git clone https://github.com/FREELABEL/iris-cli.git
+```
+
+Then configure credentials:
+
+```bash
+cd iris-cli && cp .env.example .env
+# Add your IRIS_API_KEY, IRIS_USER_ID, IRIS_API_URL
+```
+
+### What Claude Code can do with it
+
+Once the skill is installed, just talk to Claude Code in natural language:
+
+```
+You: "Create a customer support agent that uses Claude 3.5 Sonnet"
+Claude Code: runs iris agent:create --name="Support Agent" --model=claude-3-5-sonnet ...
+
+You: "Upload our product docs to agent 42's knowledge base"
+Claude Code: runs iris bloq:ingest 42 /docs/product-guide.pdf
+
+You: "Search our CRM for all leads tagged 'enterprise' in negotiation"
+Claude Code: runs iris sdk:call leads.search status=Negotiation tags=enterprise
+
+You: "Run the eval suite on agent 387 and show me the results"
+Claude Code: runs iris eval 387 --json
+
+You: "Set up a daily 9am briefing for agent 11"
+Claude Code: runs iris schedule create 11 --frequency=daily --time=09:00
+
+You: "Chat with agent 11 using GPT-5-nano and ask it to analyze our pipeline"
+Claude Code: runs iris chat 11 "Analyze our pipeline" --model=gpt-5-nano
+```
+
+Claude Code reads the skill definition, understands all 36+ CLI commands and 200+ SDK methods, and picks the right one. You describe what you want, it executes.
+
+### Multi-LLM orchestration from your editor
+
+This is the real unlock. You're in Claude Code (running Claude). You tell it to trigger an IRIS workflow that runs on GPT-4o. That agent calls a sub-agent running Gemini. Three different LLMs, orchestrated from a single conversation in your terminal:
+
+```
+You: "Use agent 15 (GPT-4o) to research our competitors, then have agent 22
+      (Claude) write a report, and schedule it to run every Monday at 9am"
+
+Claude Code:
+  → iris sdk:call workflows.execute agent_id=15 query="Research competitors"
+  → iris chat 22 "Write a report from this research: ..."
+  → iris schedule create 22 --frequency=weekly --time=09:00 --day=monday
+```
+
+Your coding agent becomes an orchestration layer. The IRIS CLI is its API.
+
+---
+
 ## SDK
 
 ### Agents
