@@ -105,15 +105,51 @@ echo $response->content;
 $workflow = $iris->agents->multiStep($agent->id,
     'Research all open support tickets and draft response templates'
 );
+```
 
-// Schedule recurring tasks
+### Scheduling & Heartbeats
+
+Autonomous agents that work on their own schedule. Create recurring jobs, monitor execution history, and let agents run heartbeat cycles — checking their knowledge base, executing pending tasks, and reporting back without human intervention.
+
+```php
+// Configure recurring tasks on an agent
 $iris->agents->setSchedule($agent->id, [
     'timezone' => 'America/New_York',
     'recurring_tasks' => [
-        ['name' => 'Daily digest', 'time' => '09:00', 'frequency' => 'daily'],
+        ['name' => 'Morning briefing', 'time' => '09:00', 'frequency' => 'daily'],
+        ['name' => 'Pipeline review', 'time' => '14:00', 'frequency' => 'weekdays'],
+        ['name' => 'Weekly report', 'time' => '17:00', 'day' => 'friday', 'frequency' => 'weekly'],
     ],
 ]);
+
+// Create a scheduled job directly
+$iris->schedules->create([
+    'agent_id' => 11,
+    'prompt' => 'Review all open leads and update their status',
+    'frequency' => 'daily',
+    'time' => '08:00',
+]);
+
+// Run a job immediately (don't wait for the schedule)
+$iris->schedules->run($jobId);
+
+// View execution history and rate results
+$history = $iris->schedules->executions($jobId);
+$iris->schedules->rateExecution($executionId, 'good', 'Accurate summary');
 ```
+
+```bash
+# CLI — full schedule management
+iris schedule status                     # Overview of all schedules
+iris schedule list --agent-id=11         # List jobs for an agent
+iris schedule create 11                  # Create a new scheduled job
+iris schedule run 42                     # Trigger a job immediately
+iris schedule history 42                 # View execution history
+iris schedule agent-history 11           # All executions for an agent
+iris schedule sync 11                    # Sync agent's recurring tasks
+```
+
+Heartbeat mode takes this further — agents autonomously gather context from their knowledge base, execute pending tasks, and write results back. The heartbeat engine runs server-side (iris-api) with quality evaluation disabled for local model compatibility.
 
 ### Workflows
 
@@ -222,6 +258,7 @@ $iris->integrations->execute('google-drive', 'search_files', [
 | Resource | CLI | What it does |
 |----------|-----|-------------|
 | `$iris->agents` | `iris agent:create`, `iris chat` | Create, chat, schedule, monitor AI agents |
+| `$iris->schedules` | `iris schedule` | Scheduled jobs, execution history, heartbeats |
 | `$iris->workflows` | `iris sdk:call workflows.*` | Multi-step execution with human-in-the-loop |
 | `$iris->leads` | `iris leads:scrape`, `iris leads:discover` | CRM — contacts, tasks, notes, invoices, outreach |
 | `$iris->bloqs` | `iris bloq:ingest`, `iris bloq:ingestion-status` | Knowledge bases — lists, items, documents |
