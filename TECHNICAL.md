@@ -2881,6 +2881,126 @@ if ($duplicate['exists']) {
 ./bin/iris sdk:call leads.checkDuplicate email="john@acme.com" bloq_id=40
 ```
 
+### 🔎 Lead Discovery (Instagram Scraper)
+
+Scrape Instagram post comments or profile followers and automatically create leads on a board. Uses Playwright browser automation with authenticated Instagram sessions.
+
+#### CLI — `leads:scrape`
+
+The primary interface. Scrapes Instagram, creates leads with comment text and timestamps as custom fields.
+
+```bash
+# Basic: scrape comments from a post, create leads on board 42
+iris leads:scrape --url=https://www.instagram.com/p/DOgSXrCju2y/ --board=42
+
+# With limit
+iris leads:scrape -u https://www.instagram.com/p/DOgSXrCju2y/ -b 42 -l 100
+
+# Dry run first (scrape only, no API calls)
+iris leads:scrape -u https://www.instagram.com/p/DOgSXrCju2y/ -b 42 --dry-run
+
+# Show browser window
+iris leads:scrape -u https://www.instagram.com/p/DOgSXrCju2y/ -b 42 --headed
+
+# Scrape followers instead of comments
+iris leads:scrape -u https://www.instagram.com/bravowwhl/ -b 42 --mode=followers -l 50
+
+# With auto-enrichment (Instagram profile + web search + AI synthesis)
+iris leads:scrape -u https://www.instagram.com/p/DOgSXrCju2y/ -b 42 --enrich
+
+# Resume an interrupted run
+iris leads:scrape -u https://www.instagram.com/p/DOgSXrCju2y/ -b 42 --resume
+
+# Full options
+iris leads:scrape \
+  --url=https://www.instagram.com/p/DOgSXrCju2y/ \
+  --board=42 \
+  --limit=200 \
+  --mode=comments \
+  --label="NYC Post Campaign" \
+  --batch-size=10 \
+  --scroll-delay=3000 \
+  --headed
+```
+
+**All flags:**
+
+| Flag | Short | Default | Description |
+|------|-------|---------|-------------|
+| `--url` | `-u` | required | Instagram post or profile URL |
+| `--board` | `-b` | required | Board/bloq ID to add leads to |
+| `--limit` | `-l` | `50` | Max leads to create |
+| `--mode` | `-m` | `comments` | Discovery mode: `comments`, `followers`, `profiles` |
+| `--ig-account` | | `heyiris.io` | Instagram session cookies account |
+| `--dry-run` | | | Scrape only — no API calls |
+| `--enrich` | | | Auto-enrich leads after creation |
+| `--label` | | | Campaign label for this run |
+| `--batch-size` | | `5` | API batch concurrency |
+| `--scroll-delay` | | `2000` | ms between scroll attempts |
+| `--resume` | | | Resume a previously interrupted run |
+| `--headed` | | | Show browser window (default: headless) |
+
+#### Data Mapping
+
+Each discovered profile creates a lead with:
+
+| Lead Field | Source |
+|-----------|--------|
+| `name` | `@username` |
+| `contact_info.instagram` | `username` |
+| `custom_fields.comment` | Comment text from the post |
+| `custom_fields.time_posted` | ISO timestamp of the comment |
+| `custom_fields.discovery_source` | `comment on <post_url>` |
+
+#### CLI — `leads:discover`
+
+Import pre-scraped usernames (from a file or comma-separated list) into a board.
+
+```bash
+# From comma-separated usernames
+iris leads:discover @user1,@user2,@user3 --board=42
+
+# From a file (one username per line)
+iris leads:discover ./discovered-profiles.txt --board=42
+
+# With enrichment
+iris leads:discover @creator1,@creator2 --board=42 --enrich
+
+# Dry run
+iris leads:discover @user1,@user2 --board=42 --dry-run
+
+# With tag
+iris leads:discover @user1,@user2 --board=42 --tag=creators
+```
+
+#### Typical Workflow
+
+1. **Create a board** in the IRIS UI → get the board ID (visible in the URL, e.g. `/bloq/42`)
+2. **Invite your client** to the board via the UI (they'll see leads in real-time)
+3. **Run the scraper**: `iris leads:scrape -u <post_url> -b 42 -l 50`
+4. Leads appear on the board with username, comment, timestamp, and source
+
+#### Scalability
+
+| Comments | Scrape Time | API Time (batch 5) | Total |
+|----------|-------------|---------------------|-------|
+| 50 | ~15s | ~5s | ~20s |
+| 200 | ~40s | ~20s | ~1m |
+| 500 | ~1.5m | ~50s | ~2.5m |
+| 1,000 | ~3m | ~1.5m | ~5m |
+
+Features: batched API calls (configurable concurrency), crash recovery via JSON progress files, resume capability, 3-layer deduplication (local set → pre-flight API check → backend duplicate detection).
+
+#### Architecture
+
+The scraper is built on Playwright with a provider/adapter pattern:
+
+- **`InstagramCommentsProvider`** — scrapes comments using structural DOM selectors anchored on `a[href*="/c/"]` comment permalinks
+- **`InstagramFollowersProvider`** — scrapes follower lists from profile pages
+- **`InstagramProfilesProvider`** — extracts profile metadata (bio, followers, etc.)
+- **`LeadgenApiClient`** — HTTP client with batched creation and pre-flight dedup
+- **`ProgressManager`** — JSON file persistence for crash recovery and resume
+
 ### � Profile & Services Management
 
 Create and manage user profiles with service offerings. Profiles live at public URLs on the FreeLABEL network:
