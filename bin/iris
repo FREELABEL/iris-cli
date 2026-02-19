@@ -1,0 +1,37 @@
+#!/usr/bin/env php
+<?php
+
+foreach ([__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $file) {
+    if (file_exists($file)) {
+        require $file;
+        break;
+    }
+}
+
+use IRIS\SDK\Console\Application;
+
+// Check if .env exists, if not and command is not 'setup', suggest running setup
+$envPath = getcwd() . '/.env';
+$runningSetup = in_array('setup', $argv ?? []);
+
+if (!file_exists($envPath) && !$runningSetup) {
+    echo "\n";
+    echo "╔════════════════════════════════════════════════════════════╗\n";
+    echo "║  Welcome to IRIS SDK!                                      ║\n";
+    echo "╚════════════════════════════════════════════════════════════╝\n";
+    echo "\n";
+    echo "⚠️  No .env configuration file found.\n";
+    echo "\n";
+    echo "To get started, run the interactive setup:\n";
+    echo "  \033[36mphp bin/iris setup\033[0m\n";
+    echo "\n";
+    echo "Or manually create a .env file with:\n";
+    echo "  IRIS_API_URL=https://apiv2.heyiris.io\n";
+    echo "  IRIS_API_KEY=your_api_token_here\n";
+    echo "  IRIS_USER_ID=your_user_id\n";
+    echo "\n";
+    exit(1);
+}
+
+$app = new Application();
+$app->run();

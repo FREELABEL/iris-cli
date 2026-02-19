@@ -1,0 +1,242 @@
+#!/usr/bin/env php
+<?php
+/**
+ * Video Concatenation CLI
+ * 
+ * Concatenate videos with professional transitions (intro + main + outro)
+ * Uses the enhanced FFMPEGService concatenation support.
+ * 
+ * Usage:
+ *   ./bin/video-concat \
+ *     --main="/path/to/main.mp4" \
+ *     --output="final.mp4" \
+ *     --intro="/storage/brands/emc/intro-3s.mp4" \
+ *     --outro="/storage/brands/emc/outro-5s.mp4" \
+ *     --transition="fade"
+ */
+
+// Find composer autoload
+foreach ([__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $file) {
+    if (file_exists($file)) {
+        require $file;
+        break;
+    }
+}
+
+use IRIS\SDK\IRIS;
+use IRIS\SDK\Config;
+
+// Parse command line arguments
+$options = getopt('', [
+    'main:',
+    'output:',
+    'intro::',
+    'outro::',
+    'transition-type::',
+    'transition-duration::',
+    'help',
+    'json',
+    'api-url::',
+    'api-key::',
+    'user-id::',
+]);
+
+// Show help
+if (isset($options['help']) || empty($options)) {
+    echo <<<'HELP'
+
+╔════════════════════════════════════════════════════════════════════╗
+║              Video Concatenation Tool - IRIS SDK                   ║
+╚════════════════════════════════════════════════════════════════════╝
+
+Concatenate videos with professional transitions (intro + main + outro)
+
+USAGE:
+  ./bin/video-concat --main=VIDEO --output=OUTPUT [OPTIONS]
+
+REQUIRED ARGUMENTS:
+  --main=PATH             Main video file path
+  --output=PATH           Output file path
+
+OPTIONAL ARGUMENTS:
+  --intro=PATH                    Intro video (prepended before main)
+  --outro=PATH                    Outro video (appended after main)
+  --transition-type=TYPE          Transition: cut, fade, dissolve (default: fade)
+  --transition-duration=SECONDS   Transition duration in seconds (default: 0.5)
+
+OTHER OPTIONS:
+  --json                          Output as JSON
+  --help                          Show this help message
+
+TRANSITION TYPES:
+  cut        - Simple cut (no re-encoding, fastest)
+  fade       - Fade to black transition (re-encodes)
+  dissolve   - Crossfade transition (re-encodes)
+
+EXAMPLES:
+
+  # Add intro and outro with fade transitions
+  ./bin/video-concat \
+    --main="/path/to/main-clip.mp4" \
+    --intro="/storage/brands/emc/intro-3s.mp4" \
+    --outro="/storage/brands/emc/outro-5s.mp4" \
+    --output="final-video.mp4" \
+    --transition-type="fade"
+
+  # Fast concatenation with simple cuts (no transition)
+  ./bin/video-concat \
+    --main="/path/to/main-clip.mp4" \
+    --intro="/storage/brands/emc/intro.mp4" \
+    --outro="/storage/brands/emc/outro.mp4" \
+    --output="final-video.mp4" \
+    --transition-type="cut"
+
+  # Only add intro
+  ./bin/video-concat \
+    --main="/path/to/main-clip.mp4" \
+    --intro="/storage/brands/emc/intro-3s.mp4" \
+    --output="with-intro.mp4"
+
+  # Only add outro
+  ./bin/video-concat \
+    --main="/path/to/main-clip.mp4" \
+    --outro="/storage/brands/emc/outro-5s.mp4" \
+    --output="with-outro.mp4"
+
+HELP;
+    exit(0);
+}
+
+// Validate required parameters
+if (!isset($options['main'])) {
+    echo "❌ Missing required parameter: --main\n";
+    echo "Run with --help for usage information.\n";
+    exit(1);
+}
+
+if (!isset($options['output'])) {
+    echo "❌ Missing required parameter: --output\n";
+    echo "Run with --help for usage information.\n";
+    exit(1);
+}
+
+// Initialize IRIS SDK
+try {
+    $configOptions = [];
+    if (isset($options['api-key'])) {
+        $configOptions['api_key'] = $options['api-key'];
+    }
+    if (isset($options['api-url'])) {
+        $configOptions['api_url'] = $options['api-url'];
+    }
+    if (isset($options['user-id'])) {
+        $configOptions['user_id'] = (int) $options['user-id'];
+    }
+    
+    $iris = new IRIS($configOptions);
+    
+} catch (\Exception $e) {
+    echo "❌ Failed to initialize IRIS SDK: {$e->getMessage()}\n";
+    exit(1);
+}
+
+// Verify files exist
+if (!file_exists($options['main'])) {
+    echo "❌ Main video file not found: {$options['main']}\n";
+    exit(1);
+}
+
+if (isset($options['intro']) && !file_exists($options['intro'])) {
+    echo "❌ Intro video file not found: {$options['intro']}\n";
+    exit(1);
+}
+
+if (isset($options['outro']) && !file_exists($options['outro'])) {
+    echo "❌ Outro video file not found: {$options['outro']}\n";
+    exit(1);
+}
+
+// Build API request parameters
+$params = [
+    'main_video' => $options['main'],
+    'output_file' => $options['output'],
+];
+
+if (isset($options['intro'])) {
+    $params['intro_video'] = $options['intro'];
+}
+
+if (isset($options['outro'])) {
+    $params['outro_video'] = $options['outro'];
+}
+
+if (isset($options['transition-type'])) {
+    $params['transition_type'] = $options['transition-type'];
+}
+
+if (isset($options['transition-duration'])) {
+    $params['transition_duration'] = (float) $options['transition-duration'];
+}
+
+// Display operation summary
+if (!isset($options['json'])) {
+    echo "\n";
+    echo "╔════════════════════════════════════════════════════════════════╗\n";
+    echo "║           Concatenating Videos with Transitions                ║\n";
+    echo "╚════════════════════════════════════════════════════════════════╝\n";
+    echo "\n";
+    echo "🎬 Videos:\n";
+    echo "   Intro:  " . (isset($params['intro_video']) ? $params['intro_video'] : 'None') . "\n";
+    echo "   Main:   {$options['main']}\n";
+    echo "   Outro:  " . (isset($params['outro_video']) ? $params['outro_video'] : 'None') . "\n";
+    echo "\n";
+    echo "⚙️  Settings:\n";
+    echo "   Transition:  " . (isset($params['transition_type']) ? $params['transition_type'] : 'fade') . "\n";
+    echo "   Duration:    " . (isset($params['transition_duration']) ? $params['transition_duration'] : '0.5') . "s\n";
+    echo "\n";
+    echo "💾 Output:    {$options['output']}\n";
+    echo "\n";
+    echo "⏳ Processing...\n";
+    echo "\n";
+}
+
+// Call API
+try {
+    $startTime = microtime(true);
+    
+    // Make API request to /api/v1/video/concat
+    $response = $iris->client->post('/api/v1/video/concat', $params);
+    
+    $elapsed = round(microtime(true) - $startTime, 2);
+    
+    // Handle JSON output
+    if (isset($options['json'])) {
+        echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+        exit($response['success'] ? 0 : 1);
+    }
+    
+    // Handle formatted output
+    if (isset($response['success']) && $response['success']) {
+        echo "✅ Videos concatenated successfully!\n";
+        echo "\n";
+        echo "📄 File:      {$response['data']['output_file']}\n";
+        echo "📦 Size:      {$response['data']['file_size_mb']} MB\n";
+        echo "⏱️  Time:      {$elapsed}s\n";
+        echo "\n";
+        exit(0);
+    } else {
+        echo "❌ Failed to concatenate videos\n";
+        if (isset($response['message'])) {
+            echo "Error: {$response['message']}\n";
+        }
+        exit(1);
+    }
+    
+} catch (\Exception $e) {
+    if (isset($options['json'])) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()], JSON_PRETTY_PRINT) . "\n";
+    } else {
+        echo "❌ Error: {$e->getMessage()}\n";
+    }
+    exit(1);
+}

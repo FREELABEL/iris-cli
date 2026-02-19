@@ -1,0 +1,17 @@
+/tests export-ignore
+/src/Laravel/config.php export-ignore
+.env export-ignore
+.env.example export-ignore
+.gitattributes export-ignore
+.gitignore export-ignore
+/vendor export-ignore
+phpunit.xml export-ignore
+*.log export-ignore
+test-*.php export-ignore
+create-*.php export-ignore
+analyze-*.php export-ignore
+update-*.php export-ignore
+add-*.php export-ignore
+quick-test.php export-ignore
+integration-test.php export-ignore
+lead-aggregation-examples.php export-ignore
