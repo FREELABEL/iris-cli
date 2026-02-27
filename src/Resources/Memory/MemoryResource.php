@@ -20,6 +20,7 @@ use IRIS\SDK\Http\Client;
  * - context: Project/workflow status (e.g., "Phase 3 of 5 complete")
  * - preference: User preferences (e.g., "Prefers formal tone")
  * - relationship: Information about other agents
+ * - document: Contracts, agreements, and reference documents
  *
  * @example
  * ```php
@@ -94,7 +95,7 @@ class MemoryResource
      * existing memory is updated instead of creating a duplicate.
      *
      * @param int $agentId The agent ID
-     * @param string $type Memory type: fact, insight, context, preference, relationship
+     * @param string $type Memory type: fact, insight, context, preference, relationship, document
      * @param string $content The memory content (max 5000 chars)
      * @param array{
      *     topic?: string,
