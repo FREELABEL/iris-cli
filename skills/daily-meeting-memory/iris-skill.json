@@ -1,0 +1,102 @@
+{
+    "iris_skill": "1.0",
+    "name": "daily-meeting-memory",
+    "display_name": "Daily Meeting Memory",
+    "description": "Track meeting notes, project context, and task assignments across sessions using IRIS agent memory. Your AI agent remembers what was discussed and follows up on action items.",
+    "version": "1.0.0",
+    "type": "cli_tool",
+    "category": "productivity",
+    "tags": ["meetings", "memory", "standup", "tasks", "notes", "context-tracking", "project-management"],
+    "icon": "fas fa-brain",
+    "capabilities": {
+        "functions": [
+            {
+                "name": "store_meeting_notes",
+                "description": "Store meeting notes and decisions as agent memory",
+                "parameters": {
+                    "agent_id": { "type": "integer", "required": true, "description": "The agent ID to store memory for" },
+                    "content": { "type": "string", "required": true, "description": "Meeting notes content" },
+                    "topic": { "type": "string", "default": "daily_standup", "description": "Memory topic category" }
+                },
+                "example": "iris sdk:call memory.store agent_id=11 type=context content=\"Discussed API redesign\" topic=daily_standup"
+            },
+            {
+                "name": "search_previous_context",
+                "description": "Recall what was discussed in previous meetings",
+                "parameters": {
+                    "agent_id": { "type": "integer", "required": true },
+                    "query": { "type": "string", "required": true, "description": "Search term to find relevant memories" }
+                },
+                "example": "iris sdk:call memory.search agent_id=11 query=\"project status\""
+            },
+            {
+                "name": "assign_task",
+                "description": "Store a task assignment in agent memory for tracking",
+                "parameters": {
+                    "agent_id": { "type": "integer", "required": true },
+                    "task": { "type": "string", "required": true, "description": "Task description" },
+                    "importance": { "type": "integer", "default": 8, "description": "Task priority 1-10" }
+                },
+                "example": "iris sdk:call memory.store agent_id=11 type=fact content=\"TODO: Draft spec by Friday\" topic=tasks importance=9"
+            },
+            {
+                "name": "recall_project_status",
+                "description": "Get the latest project status from agent memory",
+                "parameters": {
+                    "agent_id": { "type": "integer", "required": true }
+                },
+                "example": "iris sdk:call memory.list agent_id=11 topic=project_status memory_type=context"
+            }
+        ],
+        "examples": [
+            {
+                "title": "Daily Standup Workflow",
+                "description": "Complete daily meeting flow: recall context, add notes, assign tasks",
+                "steps": [
+                    "iris sdk:call memory.search agent_id=11 query=\"yesterday standup\"",
+                    "iris sdk:call memory.store agent_id=11 type=context content=\"Sprint review: 8/10 tickets complete\" topic=daily_standup",
+                    "iris sdk:call memory.store agent_id=11 type=fact content=\"TODO: Fix auth bug by EOD\" topic=tasks importance=9"
+                ]
+            },
+            {
+                "title": "Weekly Review",
+                "description": "Search all meeting notes from the past week",
+                "steps": [
+                    "iris sdk:call memory.search agent_id=11 query=\"standup meeting\"",
+                    "iris sdk:call memory.list agent_id=11 topic=tasks memory_type=fact"
+                ]
+            }
+        ]
+    },
+    "entry": {
+        "command": "iris sdk:call memory.store",
+        "scripts": {
+            "daily-standup": "scripts/daily-standup.sh",
+            "recall-context": "scripts/recall-context.sh",
+            "assign-task": "scripts/assign-task.sh"
+        }
+    },
+    "dependencies": {
+        "required": ["iris-sdk>=1.0.0"],
+        "optional": []
+    },
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "agent_id": { "type": "integer", "description": "Agent ID to manage memory for" },
+            "content": { "type": "string", "description": "Memory content to store" },
+            "topic": { "type": "string", "description": "Category topic for the memory" }
+        },
+        "required": ["agent_id"]
+    },
+    "pricing": {
+        "model": "free"
+    },
+    "author": {
+        "name": "IRIS Team",
+        "url": "https://heyiris.io"
+    },
+    "repository": "https://github.com/FREELABEL/iris-cli",
+    "license": "MIT",
+    "min_sdk_version": "1.0.0"
+}

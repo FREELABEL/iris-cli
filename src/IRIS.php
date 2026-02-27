@@ -35,6 +35,7 @@ use IRIS\SDK\Resources\Users\UsersResource;
 use IRIS\SDK\Resources\Pages\PagesResource;
 use IRIS\SDK\Resources\Payments\PaymentsResource;
 use IRIS\SDK\Resources\Marketplace\MarketplaceResource;
+use IRIS\SDK\Resources\Memory\MemoryResource;
 use IRIS\SDK\Events\WebhookHandler;
 
 /**
@@ -243,6 +244,11 @@ class IRIS
     public MarketplaceResource $marketplace;
 
     /**
+     * Memory resource for managing agent working memory (surface memory).
+     */
+    public MemoryResource $memory;
+
+    /**
      * Create a new IRIS client instance.
      *
      * @param array{
@@ -296,6 +302,7 @@ class IRIS
         $this->pages = new PagesResource($this->http, $this->config);
         $this->payments = new PaymentsResource($this->http, $this->config);
         $this->marketplace = new MarketplaceResource($this->http, $this->config);
+        $this->memory = new MemoryResource($this->http, $this->config);
     }
 
     /**
