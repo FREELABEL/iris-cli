@@ -1534,6 +1534,210 @@ $iris->bloqs->addCustomField($kb->id, [
 
 ---
 
+### 🧠 Agent Working Memory (Surface Memory)
+
+Store and retrieve persistent working memory for agents. Unlike Bloqs (which are knowledge bases for RAG), working memory stores facts, insights, context, and preferences that agents accumulate during conversations and workflows.
+
+#### Three-Tier Memory Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Tier 1: Session State (Redis/MySQL checkpoints)            │
+│  └── Crash recovery, workflow state, short-term context     │
+├─────────────────────────────────────────────────────────────┤
+│  Tier 2: Working Memory (Surface Memory) ← THIS            │
+│  ├── Personal scratchpad per agent                          │
+│  ├── Facts, insights, context, preferences                  │
+│  ├── Deduplication (>80% similarity = update, not create)   │
+│  └── Semantic search via ChromaDB                           │
+├─────────────────────────────────────────────────────────────┤
+│  Tier 3: Knowledge Base (Bloqs + Pinecone)                  │
+│  └── Permanent, shared, RAG-indexed documents               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Memory Types
+
+| Type | Purpose | Example |
+|------|---------|---------|
+| `fact` | Learned information | "Client's budget is $50k/quarter" |
+| `insight` | Discovered patterns | "Email open rates peak on Tuesdays" |
+| `context` | Project/workflow status | "Phase 3 of 5 complete" |
+| `preference` | User preferences | "Prefers formal tone in emails" |
+| `relationship` | Inter-agent knowledge | "Sales agent handles pricing questions" |
+
+#### CLI Examples
+
+```bash
+# Store a fact
+./bin/iris sdk:call memory.store agent_id=11 type=fact content="Client prefers morning meetings" topic=scheduling importance=7
+
+# Store project context
+./bin/iris sdk:call memory.store agent_id=11 type=context content="Q1 campaign: Phase 2 of 4 complete" topic=marketing_campaign
+
+# Store a task assignment
+./bin/iris sdk:call memory.store agent_id=11 type=fact content="TODO: Draft API spec by Friday" topic=tasks importance=9
+
+# List all memories for an agent
+./bin/iris sdk:call memory.list agent_id=11
+
+# Filter by topic
+./bin/iris sdk:call memory.list agent_id=11 topic=scheduling
+
+# Filter by type and importance
+./bin/iris sdk:call memory.list agent_id=11 memory_type=fact min_importance=7
+
+# Search memories (keyword + semantic)
+./bin/iris sdk:call memory.search agent_id=11 query="meeting preferences"
+
+# Delete a memory
+./bin/iris sdk:call memory.delete MEMORY_UUID_HERE
+```
+
+#### SDK Examples
+
+```php
+// Store a memory
+$iris->memory->store(11, 'fact', 'Client prefers morning meetings', [
+    'topic' => 'scheduling',
+    'importance' => 7,
+]);
+
+// Store project context
+$iris->memory->store(11, 'context', 'Sprint 3: 8/10 tickets complete', [
+    'topic' => 'project_status',
+]);
+
+// List memories
+$memories = $iris->memory->list(11, [
+    'topic' => 'scheduling',
+    'memory_type' => 'fact',
+]);
+
+foreach ($memories['memories'] as $memory) {
+    echo "[{$memory['memory_type']}] {$memory['content']}\n";
+    echo "  Topic: {$memory['topic']} | Importance: {$memory['importance']}\n";
+}
+
+// Search memories (keyword + semantic search)
+$results = $iris->memory->search(11, 'meeting preferences');
+
+// Delete a memory
+$iris->memory->delete('550e8400-e29b-41d4-a716-446655440000');
+```
+
+#### Daily Meeting Workflow
+
+```bash
+#!/bin/bash
+# Daily standup memory workflow
+
+AGENT_ID=11
+
+# 1. Recall yesterday's context
+echo "=== Previous Context ==="
+./bin/iris sdk:call memory.search agent_id=$AGENT_ID query="project status standup"
+
+# 2. Store today's meeting notes
+./bin/iris sdk:call memory.store agent_id=$AGENT_ID \
+  type=context \
+  content="Discussed API redesign, team agreed on REST approach" \
+  topic=daily_standup \
+  importance=7
+
+# 3. Assign tasks from the meeting
+./bin/iris sdk:call memory.store agent_id=$AGENT_ID \
+  type=fact \
+  content="TODO: Draft API spec by Friday" \
+  topic=tasks \
+  importance=9
+
+./bin/iris sdk:call memory.store agent_id=$AGENT_ID \
+  type=fact \
+  content="TODO: Review competitor analysis by Wednesday" \
+  topic=tasks \
+  importance=8
+```
+
+#### Structured Entity Memory (CRM Proxy)
+
+The memory namespace also surfaces structured business data from the agent's workspace.
+Leads, tasks, invoices, and outreach steps are accessible through `memory.entities` and `memory.graph`.
+
+```
+┌─────────────────────────────────────────────────┐
+│              memory.* namespace                  │
+├─────────────────────┬───────────────────────────┤
+│  Unstructured       │  Structured (CRM)         │
+│  memory.store       │  memory.entities           │
+│  memory.search      │  memory.graph              │
+│  memory.list        │                            │
+│  memory.delete      │  Proxied from:             │
+│                     │  leads → tasks → invoices  │
+│  (AgentSurfaceMemory│  → outreach → deliverables│
+│   + ChromaDB)       │  (fl_api database)         │
+└─────────────────────┴───────────────────────────┘
+```
+
+##### CLI Examples
+
+```bash
+# List leads in the agent's workspace
+./bin/iris sdk:call memory.entities agent_id=11
+
+# List all tasks across leads
+./bin/iris sdk:call memory.entities agent_id=11 type=tasks
+
+# Get invoices for a specific lead
+./bin/iris sdk:call memory.entities agent_id=11 type=invoices lead_id=412
+
+# Get all sub-entities for a specific lead
+./bin/iris sdk:call memory.entities agent_id=11 lead_id=412
+
+# Get outreach steps
+./bin/iris sdk:call memory.entities agent_id=11 type=outreach
+
+# Get the full entity relationship graph
+./bin/iris sdk:call memory.graph agent_id=11
+```
+
+##### SDK Examples
+
+```php
+// List leads for the agent's workspace
+$leads = $iris->memory->entities(11);
+
+// Get tasks across all leads
+$tasks = $iris->memory->entities(11, ['type' => 'tasks']);
+
+// Get invoices for a specific lead
+$invoices = $iris->memory->entities(11, [
+    'type' => 'invoices',
+    'lead_id' => 412,
+]);
+
+// Get the full entity relationship graph
+$graph = $iris->memory->graph(11);
+
+echo "Leads: {$graph['graph']['totals']['leads']}\n";
+echo "Tasks: {$graph['graph']['totals']['tasks']}\n";
+echo "Invoices: {$graph['graph']['totals']['invoices']}\n";
+
+// Walk the graph
+foreach ($graph['graph']['leads'] as $lead) {
+    echo "{$lead['name']} ({$lead['status']})\n";
+    foreach ($lead['tasks'] as $task) {
+        $icon = $task['is_completed'] ? 'x' : ' ';
+        echo "  [{$icon}] {$task['title']}\n";
+    }
+    foreach ($lead['invoices'] as $invoice) {
+        echo "  \$ {$invoice['title']} — {$invoice['price']}\n";
+    }
+}
+```
+
+---
+
 ### 🤖 AI Agents
 
 Create, configure, and interact with intelligent AI agents.
@@ -3931,6 +4135,7 @@ php test-agent-cli-eval.php 387 comparison
 | `$iris->rag` | `query`, `index`, `indexFile`, `searchSimilar`, `delete` |
 | `$iris->tools` | `list`, `invoke`, `recruitment`, `scoreCandidates`, `enrichLead`, `newsletterResearch`, `newsletterWrite` |
 | `$iris->articles` | `generate`, `generateFromVideo`, `generateFromTopic`, `generateFromWebpage`, `generateFromRss`, `generateFromResearchNotes`, `generateFromDraft`, `create` |
+| `$iris->memory` | `list`, `store`, `search`, `delete`, `entities`, `graph` |
 
 ## Troubleshooting
 
