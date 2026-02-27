@@ -164,10 +164,12 @@ class Client
             return $this->config->flApiUrl . '/' . ltrim($endpoint, '/');
         }
 
-        // Use IRIS URL for workflow/chat endpoints (V5 system ONLY)
+        // Use IRIS URL for workflow/chat/memory endpoints (iris-api)
         if (str_contains($endpoint, '/iris/')
             || str_contains($endpoint, '/chat/')
             || str_contains($endpoint, '/workflows/')
+            || str_contains($endpoint, '/v6/memory')
+            || str_contains($endpoint, '/v6/secrets')
         ) {
             return $this->config->irisUrl . '/' . ltrim($endpoint, '/');
         }

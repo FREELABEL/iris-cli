@@ -83,7 +83,7 @@ class MemoryResource
             'agent_id' => $agentId,
         ], $options);
 
-        return $this->http->get('/v6/memory', $params);
+        return $this->http->get('/api/v6/memory', $params);
     }
 
     /**
@@ -133,7 +133,7 @@ class MemoryResource
             'content' => $content,
         ], $options);
 
-        return $this->http->post('/v6/memory', $data);
+        return $this->http->post('/api/v6/memory', $data);
     }
 
     /**
@@ -168,7 +168,7 @@ class MemoryResource
             'query' => $query,
         ], $options);
 
-        return $this->http->get('/v6/memory/search', $params);
+        return $this->http->get('/api/v6/memory/search', $params);
     }
 
     /**
@@ -233,7 +233,7 @@ class MemoryResource
             'agent_id' => $agentId,
         ], $options);
 
-        return $this->http->get('/v6/memory/entities', $params);
+        return $this->http->get('/api/v6/memory/entities', $params);
     }
 
     /**
@@ -263,7 +263,7 @@ class MemoryResource
      */
     public function graph(int $agentId): array
     {
-        return $this->http->get('/v6/memory/graph', [
+        return $this->http->get('/api/v6/memory/graph', [
             'agent_id' => $agentId,
         ]);
     }
