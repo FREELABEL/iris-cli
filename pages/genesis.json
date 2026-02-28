@@ -1,0 +1,520 @@
+{
+    "id": 77,
+    "slug": "genesis",
+    "title": "Genesis - AI-Powered Creative Builder",
+    "seo_title": "Genesis | AI-Powered Creative Builder",
+    "seo_description": "Your AI development agent. Genesis architects, builds, and deploys websites, apps, and digital products on managed infrastructure \u2014 from a single conversation.",
+    "og_image": null,
+    "status": "published",
+    "owner_type": "system",
+    "owner_id": null,
+    "json_content": {
+        "version": "1.0",
+        "type": "landing",
+        "theme": {
+            "mode": "dark",
+            "branding": {
+                "name": "Genesis",
+                "primaryColor": "#10b981",
+                "secondaryColor": "#6366f1",
+                "description": "Your AI development agent. Genesis architects, builds, and deploys websites, apps, and digital products on managed infrastructure \u2014 from a single conversation."
+            }
+        },
+        "components": [
+            {
+                "type": "SiteNavigation",
+                "id": "iris-nav",
+                "props": {
+                    "logo": {
+                        "text": "IRIS",
+                        "url": "https://heyiris.io",
+                        "accentDot": true
+                    },
+                    "links": [
+                        {
+                            "label": "ReachR",
+                            "url": "/p/reachr",
+                            "subtitle": "AI Outreach & Lead Gen"
+                        },
+                        {
+                            "label": "Copycat",
+                            "url": "/p/copycat",
+                            "subtitle": "AI Content Engine"
+                        },
+                        {
+                            "label": "Vault",
+                            "url": "/p/vault",
+                            "subtitle": "Memory & Data Layer"
+                        },
+                        {
+                            "label": "Heartbeat",
+                            "url": "/p/heartbeat",
+                            "subtitle": "Autonomous Scheduling"
+                        },
+                        {
+                            "label": "Atlas",
+                            "url": "/p/atlas",
+                            "subtitle": "AI Chief of Staff"
+                        },
+                        {
+                            "label": "Genesis",
+                            "url": "/p/genesis",
+                            "subtitle": "AI Creative Builder"
+                        },
+                        {
+                            "label": "Hive",
+                            "url": "/p/hive",
+                            "subtitle": "Multi-Agent Teams"
+                        },
+                        {
+                            "label": "Lexicon",
+                            "url": "/p/lexicon",
+                            "subtitle": "AI Legal Intelligence"
+                        }
+                    ],
+                    "ctaButton": {
+                        "text": "Get Started",
+                        "url": "https://app.heyiris.io/pricing?source=iris"
+                    },
+                    "transparent": false,
+                    "themeMode": "dark"
+                }
+            },
+            {
+                "type": "Hero",
+                "id": "genesis-hero",
+                "props": {
+                    "themeMode": "dark",
+                    "title": "Genesis",
+                    "subtitle": "Your AI development agent. Tell Genesis what you need \u2014 websites, apps, newsletters, payments, communities \u2014 and it architects, builds, and deploys everything on managed infrastructure. Full-stack. Full service. Hosting included.",
+                    "labelText": "GENESIS \u2014 AI BUILDER AGENT",
+                    "primaryButtonText": "View Pricing",
+                    "primaryButtonUrl": "https://app.heyiris.io/pricing?source=genesis",
+                    "primaryButtonVariant": "emerald",
+                    "secondaryButtonText": "Book a Demo",
+                    "secondaryButtonUrl": "/p/book-demo?source=genesis",
+                    "secondaryButtonVariant": "outline",
+                    "backgroundGradient": "from-gray-950 via-emerald-950/30 to-gray-950",
+                    "backgroundPattern": "circuit",
+                    "fullHeight": true,
+                    "showScrollIndicator": true,
+                    "showFloatingElements": true,
+                    "textAlign": "center",
+                    "overlayOpacity": 0.3
+                }
+            },
+            {
+                "type": "StatsCounter",
+                "id": "genesis-stats",
+                "props": {
+                    "themeMode": "dark",
+                    "stats": [
+                        {
+                            "value": "AI Agent",
+                            "label": "Builds From Conversation",
+                            "icon": "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                        },
+                        {
+                            "value": "Full-Stack",
+                            "label": "Sites, Apps, Payments, Agents",
+                            "icon": "M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6z|M14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6z|M4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2z|M14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+                        },
+                        {
+                            "value": "Hosted",
+                            "label": "Deploy + SSL + CDN Included",
+                            "icon": "M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"
+                        },
+                        {
+                            "value": "5 min",
+                            "label": "Idea to Live Deployment",
+                            "icon": "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                        }
+                    ]
+                }
+            },
+            {
+                "type": "GettingStartedSteps",
+                "id": "genesis-how-it-works",
+                "props": {
+                    "themeMode": "dark",
+                    "title": "Brief the Agent. Get It Built. Go Live.",
+                    "subtitle": "Genesis is your AI development team. You focus on the vision \u2014 the agent handles everything else.",
+                    "steps": [
+                        {
+                            "number": 1,
+                            "title": "Brief Your Agent",
+                            "description": "Describe what you need in plain English. A landing page, a newsletter, an AI agent, a membership program \u2014 Genesis asks clarifying questions, then gets to work."
+                        },
+                        {
+                            "number": 2,
+                            "title": "Genesis Builds",
+                            "description": "The agent creates pages, configures payments, sets up workflows, writes copy, and trains AI agents. Preview the result and iterate with the agent in real time."
+                        },
+                        {
+                            "number": 3,
+                            "title": "Deploy & Host",
+                            "description": "One click to go live. Managed hosting, custom domain, SSL, CDN, and uptime monitoring \u2014 all included. No server setup, no DevOps, no extra bills."
+                        }
+                    ],
+                    "ctaText": "Start Building",
+                    "ctaUrl": "https://app.heyiris.io/pricing?source=genesis"
+                }
+            },
+            {
+                "type": "BenefitsSection",
+                "id": "genesis-problem",
+                "props": {
+                    "themeMode": "dark",
+                    "accentColor": "red",
+                    "sectionLabel": "The Problem",
+                    "title": "You Shouldn't Need a Dev Agency to Launch a Website",
+                    "description": "Founders and businesses burn through budgets hiring developers, stitching together scattered tools, and fighting with hosting. Genesis replaces the entire process with one AI agent.",
+                    "benefits": [
+                        {
+                            "icon": "blocks",
+                            "title": "Developer Dependency",
+                            "description": "You shouldn't need a $150/hr agency to launch a website. Every feature request becomes a ticket, a sprint, and a bill."
+                        },
+                        {
+                            "icon": "lineChart",
+                            "title": "Hosting Headaches",
+                            "description": "DNS, SSL, server config, uptime monitoring \u2014 why is this your job? Infrastructure should be invisible."
+                        },
+                        {
+                            "icon": "wallet",
+                            "title": "Scattered Stack",
+                            "description": "Pages on Squarespace, email on Mailchimp, payments on Stripe, CRM somewhere else. Each with its own login, billing, and learning curve."
+                        },
+                        {
+                            "icon": "sparkles",
+                            "title": "No AI in the Loop",
+                            "description": "Traditional builders don't learn, adapt, or improve your site over time. You're always starting from scratch."
+                        }
+                    ]
+                }
+            },
+            {
+                "type": "FeatureGrid",
+                "id": "genesis-features",
+                "props": {
+                    "themeMode": "dark",
+                    "labelText": "WHAT GENESIS BUILDS",
+                    "title": "One Agent. Full-Stack Delivery.",
+                    "subtitle": "Genesis is an AI agent that architects, builds, and deploys your entire digital presence. Describe what you need \u2014 Genesis handles the rest, including hosting.",
+                    "columns": 2,
+                    "features": [
+                        {
+                            "icon": "M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5z|M4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6z|M16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z",
+                            "title": "Genesis Creates Landing Pages",
+                            "description": "Describe your vision in plain English. Genesis designs, codes, and deploys responsive landing pages with built-in SEO and analytics.",
+                            "stat": "No Code",
+                            "accentColor": "emerald-500"
+                        },
+                        {
+                            "icon": "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z|M15 12a3 3 0 11-6 0 3 3 0 016 0z",
+                            "title": "Genesis Configures Business Logic",
+                            "description": "Forms, conditional workflows, approval chains, and custom data pipelines \u2014 all set up by the agent based on your requirements.",
+                            "stat": "Visual",
+                            "accentColor": "lime-500"
+                        },
+                        {
+                            "icon": "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z",
+                            "title": "Genesis Launches Communities",
+                            "description": "Membership programs, courses, and community spaces with enrollment, access control, and engagement tools \u2014 built and deployed automatically.",
+                            "stat": "Built In",
+                            "accentColor": "cyan-500"
+                        },
+                        {
+                            "icon": "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
+                            "title": "Genesis Sets Up Payments",
+                            "description": "Stripe payment processing, subscriptions, tipping, and one-time purchases \u2014 configured and tested by the agent. Start earning from day one.",
+                            "stat": "Stripe",
+                            "accentColor": "violet-500"
+                        },
+                        {
+                            "icon": "M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
+                            "title": "Genesis Writes Newsletters",
+                            "description": "AI-written, scheduled, and segmented newsletters. The agent handles copy, design, audience targeting, and delivery analytics.",
+                            "stat": "AI",
+                            "accentColor": "pink-500"
+                        },
+                        {
+                            "icon": "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
+                            "title": "Genesis Trains AI Agents",
+                            "description": "Custom AI agents trained on your brand voice and knowledge base. Genesis creates agents that sound like you and know your domain.",
+                            "stat": "Custom",
+                            "accentColor": "amber-500"
+                        },
+                        {
+                            "icon": "M13 10V3L4 14h7v7l9-11h-7z",
+                            "title": "Genesis Wires Workflows",
+                            "description": "Multi-step automations connecting your entire stack. 100+ integrations, drag-and-drop builder, all orchestrated by the agent.",
+                            "stat": "100+",
+                            "accentColor": "indigo-500"
+                        },
+                        {
+                            "icon": "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z",
+                            "title": "Genesis Captures Leads",
+                            "description": "Smart forms, lead scoring, and CRM integration \u2014 automatically configured. The agent sets up your entire lead pipeline.",
+                            "stat": "Auto",
+                            "accentColor": "emerald-500"
+                        },
+                        {
+                            "icon": "M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z",
+                            "title": "Managed Hosting & Deployment",
+                            "description": "Genesis deploys to managed infrastructure with SSL, CDN, custom domains, and uptime monitoring. No server setup required.",
+                            "stat": "Included",
+                            "accentColor": "teal-500"
+                        },
+                        {
+                            "icon": "M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4",
+                            "title": "No-Code / Full API",
+                            "description": "Zero technical barriers for non-technical users. Full API access and SDK for developers who want to extend. Need sovereign infrastructure? Upgrade to Hive.",
+                            "stat": "Flex",
+                            "accentColor": "sky-500"
+                        }
+                    ]
+                }
+            },
+            {
+                "type": "FeatureIconsGrid",
+                "id": "genesis-use-cases",
+                "props": {
+                    "themeMode": "dark",
+                    "sectionLabel": "Who Genesis Is For",
+                    "title": "Built for Anyone Who Needs a Digital Presence",
+                    "titleGradient": true,
+                    "subtitle": "Whether you're launching your first product or managing clients, Genesis gives you an AI agent that handles the build and the hosting.",
+                    "features": [
+                        {
+                            "icon": "rocket",
+                            "title": "Non-Technical Founders",
+                            "description": "Go from idea to live MVP in hours, not months. No developers needed \u2014 just brief the agent and launch."
+                        },
+                        {
+                            "icon": "code2",
+                            "title": "Indie Hackers & Makers",
+                            "description": "Ship fast, iterate faster. The agent builds and tests product ideas with real users while you focus on growth."
+                        },
+                        {
+                            "icon": "layers",
+                            "title": "Agency Owners",
+                            "description": "White-label Genesis for your clients. Spin up branded sites, lead funnels, and automations in minutes \u2014 hosting included."
+                        },
+                        {
+                            "icon": "barChart2",
+                            "title": "Product Managers",
+                            "description": "Prototype before engineering. The agent builds functional landing pages and workflows to validate ideas with stakeholders."
+                        },
+                        {
+                            "icon": "newspaper",
+                            "title": "Content Creators",
+                            "description": "Monetize your audience with membership programs, newsletters, fan funding, and branded communities \u2014 all built and hosted by Genesis."
+                        },
+                        {
+                            "icon": "shieldCheck",
+                            "title": "Teams Migrating From Agencies",
+                            "description": "Stop paying $5,000/month for developer agencies. Genesis builds the same sites for a fraction of the cost with managed hosting included."
+                        }
+                    ]
+                }
+            },
+            {
+                "type": "BenefitsSection",
+                "id": "genesis-why-choose",
+                "props": {
+                    "themeMode": "dark",
+                    "accentColor": "purple",
+                    "sectionLabel": "Why Genesis",
+                    "title": "Why Builders Choose Genesis",
+                    "description": "Genesis isn't a website builder. It's an AI agent that understands your business, builds what you need, deploys it on managed infrastructure, and keeps improving it over time.",
+                    "benefits": [
+                        {
+                            "icon": "sparkles",
+                            "title": "AI Agent, Not a Template",
+                            "description": "Genesis understands context and builds custom \u2014 not cookie-cutter templates. Every site is tailored to your business."
+                        },
+                        {
+                            "icon": "blocks",
+                            "title": "Full-Stack in One Place",
+                            "description": "Pages, payments, newsletters, leads, agents, workflows \u2014 everything a digital business needs, unified under one agent."
+                        },
+                        {
+                            "icon": "lineChart",
+                            "title": "Hosting Included",
+                            "description": "No Vercel, no Netlify, no AWS setup. Managed infrastructure with SSL, CDN, custom domains, and uptime monitoring included with every plan."
+                        },
+                        {
+                            "icon": "wallet",
+                            "title": "Continuous Improvement",
+                            "description": "Genesis doesn't stop at launch. The agent can update, optimize, and iterate on your site over time as your business evolves."
+                        }
+                    ]
+                }
+            },
+            {
+                "type": "PricingPlans",
+                "id": "genesis-pricing",
+                "props": {
+                    "title": "Simple Pricing. Everything Included.",
+                    "subtitle": "AI agent access, managed hosting, deployment, and unlimited builds. Save up to 40% with annual billing.",
+                    "columns": 2,
+                    "accentColor": "emerald",
+                    "themeMode": "dark",
+                    "checkoutMode": "redirect",
+                    "packages": [
+                        {
+                            "id": "genesis-builder",
+                            "name": "Builder",
+                            "description": "Or $300/mo billed annually \u2014 Save 40%",
+                            "price": 500,
+                            "billingType": "monthly",
+                            "accentIcon": "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",
+                            "deliveryMethod": "redirect",
+                            "deliveryContent": "https://app.heyiris.io/pricing?source=genesis",
+                            "ctaText": "Get Started",
+                            "ctaUrl": "https://app.heyiris.io/pricing?source=genesis",
+                            "features": [
+                                "AI agent builds & deploys your sites",
+                                "Managed hosting with SSL & CDN",
+                                "Custom domain support",
+                                "Up to 5 pages / projects",
+                                "Newsletter automation",
+                                "Payment & subscription setup (Stripe)",
+                                "Basic lead capture",
+                                "Email support",
+                                "2,000 AI credits / month"
+                            ]
+                        },
+                        {
+                            "id": "genesis-pro",
+                            "name": "Builder Pro",
+                            "description": "Or $500/mo billed annually \u2014 Save 37%",
+                            "price": 800,
+                            "billingType": "monthly",
+                            "highlighted": true,
+                            "badgeText": "Best Value",
+                            "accentIcon": "M13 10V3L4 14h7v7l9-11h-7z",
+                            "deliveryMethod": "redirect",
+                            "deliveryContent": "https://app.heyiris.io/pricing?source=genesis",
+                            "ctaText": "Get Builder Pro",
+                            "ctaUrl": "https://app.heyiris.io/pricing?source=genesis",
+                            "features": [
+                                "Everything in Builder",
+                                "Unlimited pages / projects",
+                                "Priority build queue",
+                                "Advanced AI workflows",
+                                "Multi-agent collaboration",
+                                "White-label options",
+                                "API access & webhooks",
+                                "Phone + priority support",
+                                "10,000 AI credits / month",
+                                "Dedicated account manager"
+                            ]
+                        }
+                    ]
+                }
+            },
+            {
+                "type": "CommunityCTA",
+                "id": "genesis-cta",
+                "props": {
+                    "themeMode": "dark",
+                    "title": "Ready to Build",
+                    "titleAccent": "Something?",
+                    "description": "Join thousands of founders, creators, and builders who replaced their dev agencies with Genesis. Your AI agent is ready.",
+                    "ctaText": "Start Building",
+                    "ctaUrl": "https://app.heyiris.io/pricing?source=genesis",
+                    "showDiscordIcon": false
+                }
+            },
+            {
+                "type": "SiteFooter",
+                "id": "genesis-footer",
+                "props": {
+                    "themeMode": "dark",
+                    "logo": {
+                        "text": "Genesis",
+                        "tagline": "AI Builder Agent by IRIS"
+                    },
+                    "copyright": "\u00a9 2026 FREELABEL, Inc. All rights reserved.",
+                    "columns": [
+                        {
+                            "title": "Product",
+                            "links": [
+                                {
+                                    "label": "Landing Pages",
+                                    "url": "https://app.heyiris.io"
+                                },
+                                {
+                                    "label": "AI Agents",
+                                    "url": "https://app.heyiris.io"
+                                },
+                                {
+                                    "label": "Workflows",
+                                    "url": "https://app.heyiris.io"
+                                },
+                                {
+                                    "label": "Newsletters",
+                                    "url": "https://app.heyiris.io"
+                                },
+                                {
+                                    "label": "Hosting",
+                                    "url": "https://heyiris.io/p/hive"
+                                }
+                            ]
+                        },
+                        {
+                            "title": "Resources",
+                            "links": [
+                                {
+                                    "label": "IRIS Platform",
+                                    "url": "https://heyiris.io"
+                                },
+                                {
+                                    "label": "Hive Infrastructure",
+                                    "url": "https://heyiris.io/p/hive"
+                                },
+                                {
+                                    "label": "Discord",
+                                    "url": "https://discord.gg/Vmfrqmdkps"
+                                },
+                                {
+                                    "label": "Blog",
+                                    "url": "https://heyiris.io/blog"
+                                }
+                            ]
+                        },
+                        {
+                            "title": "Legal",
+                            "links": [
+                                {
+                                    "label": "Privacy Policy",
+                                    "url": "https://heyiris.io/privacy"
+                                },
+                                {
+                                    "label": "Terms of Service",
+                                    "url": "https://heyiris.io/terms"
+                                }
+                            ]
+                        }
+                    ],
+                    "socialLinks": [
+                        {
+                            "platform": "x",
+                            "url": "https://x.com/heyirisio"
+                        },
+                        {
+                            "platform": "github",
+                            "url": "https://github.com/freelabel"
+                        },
+                        {
+                            "platform": "linkedin",
+                            "url": "https://linkedin.com/company/freelabel"
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+}
