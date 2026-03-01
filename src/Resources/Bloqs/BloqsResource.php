@@ -636,6 +636,44 @@ class BloqsResource
         return true;
     }
 
+    /**
+     * Invite a user to a bloq by email address.
+     * Creates a pending user account if the email is not already registered.
+     * Automatically creates a human agent for the team member.
+     *
+     * @param int $bloqId Bloq ID
+     * @param string $email Email address to invite
+     * @param string $permission Permission level: 'viewer', 'editor', 'owner'
+     * @param string|null $name Optional display name for the invitee
+     * @param bool $sendEmail Whether to send invitation email (default: true)
+     * @return array Invite result with 'user', 'pending', and 'message' keys
+     *
+     * @example
+     * ```php
+     * // Invite by email with editor access
+     * $result = $iris->bloqs->invite(40, 'alex@example.com', 'editor', 'Alex');
+     *
+     * // Invite without sending email
+     * $result = $iris->bloqs->invite(40, 'team@example.com', 'viewer', null, false);
+     * ```
+     */
+    public function invite(int $bloqId, string $email, string $permission = 'viewer', ?string $name = null, bool $sendEmail = true): array
+    {
+        $sharingUserId = $this->config->requireUserId();
+        $payload = [
+            'email' => $email,
+            'permission' => $permission,
+            'sharing_user_id' => $sharingUserId,
+            'send_notification_email' => $sendEmail,
+        ];
+
+        if ($name !== null) {
+            $payload['name'] = $name;
+        }
+
+        return $this->http->post("/api/v1/user/bloqs/{$bloqId}/invite", $payload);
+    }
+
     // =========================================================================
     // CONTENT MANAGEMENT (for RAG/Knowledge Base)
     // =========================================================================

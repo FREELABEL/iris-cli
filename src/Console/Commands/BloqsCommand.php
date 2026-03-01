@@ -208,7 +208,14 @@ class BloqsCommand extends Command
         }
 
         if ($input->getOption('json')) {
-            $io->writeln(json_encode($bloq->toArray(), JSON_PRETTY_PRINT));
+            $bloqArray = $bloq->toArray();
+            try {
+                $sharedUsersResponse = $iris->bloqs->getSharedUsers($bloqId);
+                $bloqArray['shared_users'] = $sharedUsersResponse['shared_users'] ?? $sharedUsersResponse['data'] ?? [];
+            } catch (\Exception $e) {
+                $bloqArray['shared_users'] = [];
+            }
+            $io->writeln(json_encode($bloqArray, JSON_PRETTY_PRINT));
 
             return Command::SUCCESS;
         }
@@ -270,6 +277,40 @@ class BloqsCommand extends Command
             } catch (\Exception $e) {
                 // Lists unavailable — not critical
             }
+        }
+
+        // Show team members
+        try {
+            $sharedUsersResponse = $iris->bloqs->getSharedUsers($bloqId);
+            $sharedUsers = $sharedUsersResponse['shared_users'] ?? $sharedUsersResponse['data'] ?? [];
+
+            if (! empty($sharedUsers)) {
+                $io->section('Team Members');
+                $table = new Table($io);
+                $table->setHeaders(['ID', 'Name', 'Email', 'Permission', 'Status']);
+
+                foreach ($sharedUsers as $member) {
+                    $status = 'active';
+                    if (isset($member['status']) && $member['status'] === 'pending') {
+                        $status = 'pending';
+                    } elseif (empty($member['email_verified_at']) && isset($member['invitation_sent_at'])) {
+                        $status = 'invited';
+                    }
+
+                    $table->addRow([
+                        $member['id'] ?? '-',
+                        mb_substr($member['name'] ?? '-', 0, 25),
+                        $member['email'] ?? '-',
+                        $member['permission'] ?? 'viewer',
+                        $status,
+                    ]);
+                }
+
+                $table->render();
+                $io->text(count($sharedUsers) . ' member(s). Manage with: iris team list ' . $bloqId);
+            }
+        } catch (\Exception $e) {
+            // Members unavailable — not critical
         }
 
         return Command::SUCCESS;
