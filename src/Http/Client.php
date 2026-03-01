@@ -160,6 +160,9 @@ class Client
             || str_contains($endpoint, '/videos')
             || str_contains($endpoint, '/collections')
             || str_contains($endpoint, '/a2p/')
+            || str_contains($endpoint, '/outreach-campaigns')
+            || str_contains($endpoint, '/calls')
+            || str_contains($endpoint, '/ai/')
         ) {
             return $this->config->flApiUrl . '/' . ltrim($endpoint, '/');
         }
@@ -170,6 +173,8 @@ class Client
             || str_contains($endpoint, '/workflows/')
             || str_contains($endpoint, '/v6/memory')
             || str_contains($endpoint, '/v6/secrets')
+            || str_contains($endpoint, '/v6/diary')
+            || str_contains($endpoint, '/v6/skills')
         ) {
             return $this->config->irisUrl . '/' . ltrim($endpoint, '/');
         }
@@ -305,8 +310,13 @@ class Client
             throw new IRISException('Invalid JSON response: ' . json_last_error_msg());
         }
 
-        // Handle wrapped responses
+        // Handle wrapped responses — preserve pagination envelope
         if (isset($data['data'])) {
+            if (isset($data['total']) || isset($data['current_page']) || isset($data['last_page'])) {
+                // Paginated response — keep the full envelope so meta is available
+                return $data;
+            }
+
             return $data['data'];
         }
 

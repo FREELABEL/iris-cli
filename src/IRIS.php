@@ -36,6 +36,8 @@ use IRIS\SDK\Resources\Pages\PagesResource;
 use IRIS\SDK\Resources\Payments\PaymentsResource;
 use IRIS\SDK\Resources\Marketplace\MarketplaceResource;
 use IRIS\SDK\Resources\Memory\MemoryResource;
+use IRIS\SDK\Resources\Diary\DiaryResource;
+use IRIS\SDK\Resources\Calls\CallsResource;
 use IRIS\SDK\Events\WebhookHandler;
 
 /**
@@ -249,6 +251,16 @@ class IRIS
     public MemoryResource $memory;
 
     /**
+     * Diary resource for viewing and managing agent daily diary entries.
+     */
+    public DiaryResource $diary;
+
+    /**
+     * Calls resource for initiating and managing outbound phone calls.
+     */
+    public CallsResource $calls;
+
+    /**
      * Create a new IRIS client instance.
      *
      * @param array{
@@ -303,6 +315,8 @@ class IRIS
         $this->payments = new PaymentsResource($this->http, $this->config);
         $this->marketplace = new MarketplaceResource($this->http, $this->config);
         $this->memory = new MemoryResource($this->http, $this->config);
+        $this->diary = new DiaryResource($this->http, $this->config);
+        $this->calls = new CallsResource($this->http, $this->config);
     }
 
     /**

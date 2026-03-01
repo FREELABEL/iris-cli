@@ -42,6 +42,13 @@ use IRIS\SDK\Console\Commands\WalletCommand;
 use IRIS\SDK\Console\Commands\LeadgenCommand;
 use IRIS\SDK\Console\Commands\LeadScrapeCommand;
 use IRIS\SDK\Console\Commands\MarketplaceCommand;
+use IRIS\SDK\Console\Commands\CloudUploadCommand;
+use IRIS\SDK\Console\Commands\DiaryCommand;
+use IRIS\SDK\Console\Commands\BloqsCommand;
+use IRIS\SDK\Console\Commands\OutreachCommand;
+use IRIS\SDK\Console\Commands\OutreachCampaignCommand;
+use IRIS\SDK\Console\Commands\OutreachSendCommand;
+use IRIS\SDK\Console\Commands\CallCommand;
 
 class Application extends BaseApplication
 {
@@ -89,6 +96,13 @@ class Application extends BaseApplication
             new WalletCommand(),
             new LeadgenCommand(),
             new LeadScrapeCommand(),
+            new CloudUploadCommand(),
+            new DiaryCommand(),
+            new BloqsCommand(),
+            new OutreachCommand(),
+            new OutreachCampaignCommand(),
+            new OutreachSendCommand(),
+            new CallCommand(),
         ]);
     }
 }
