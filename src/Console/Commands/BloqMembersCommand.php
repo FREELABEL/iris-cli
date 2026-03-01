@@ -33,14 +33,15 @@ class BloqMembersCommand extends Command
             ->setName('bloqs:members')
             ->setAliases(['members', 'team'])
             ->setDescription('Manage bloq team members and sharing permissions')
-            ->setHelp('Commands: list, add, invite, update, remove')
-            ->addArgument('action', InputArgument::REQUIRED, 'Action: list|add|invite|update|remove')
-            ->addArgument('bloq-id', InputArgument::REQUIRED, 'Bloq ID')
+            ->setHelp('Commands: overview, list, add, invite, update, remove')
+            ->addArgument('action', InputArgument::REQUIRED, 'Action: overview|list|add|invite|update|remove')
+            ->addArgument('bloq-id', InputArgument::OPTIONAL, 'Bloq ID (required for all actions except overview)')
             ->addArgument('target-id', InputArgument::OPTIONAL, 'Target user ID (for add/update/remove)')
             ->addOption('permission', 'p', InputOption::VALUE_REQUIRED, 'Permission: viewer|editor|owner', 'viewer')
             ->addOption('email', 'e', InputOption::VALUE_REQUIRED, 'Email address (for invite)')
             ->addOption('name', null, InputOption::VALUE_REQUIRED, 'Display name (for invite)')
             ->addOption('no-email', null, InputOption::VALUE_NONE, 'Skip sending invitation email')
+            ->addOption('all', null, InputOption::VALUE_NONE, 'Show all bloqs including those with no members (overview)')
             ->addOption('json', null, InputOption::VALUE_NONE, 'Output as JSON')
             ->addOption('api-key', null, InputOption::VALUE_REQUIRED, 'API key')
             ->addOption('user-id', null, InputOption::VALUE_REQUIRED, 'User ID');
@@ -63,6 +64,9 @@ class BloqMembersCommand extends Command
             $iris = new IRIS($configOptions);
 
             switch ($action) {
+                case 'overview':
+                case 'summary':
+                    return $this->overviewMembers($iris, $input, $io);
                 case 'list':
                 case 'ls':
                     return $this->listMembers($iris, $input, $io);
@@ -80,7 +84,7 @@ class BloqMembersCommand extends Command
                     return $this->removeMember($iris, $input, $io);
                 default:
                     $io->error("Unknown action: {$action}");
-                    $io->text('Available actions: list, add, invite, update, remove');
+                    $io->text('Available actions: overview, list, add, invite, update, remove');
 
                     return Command::FAILURE;
             }
@@ -100,11 +104,133 @@ class BloqMembersCommand extends Command
     }
 
     /**
+     * Scan all bloqs and show a cross-bloq member summary.
+     */
+    private function overviewMembers(IRIS $iris, InputInterface $input, SymfonyStyle $io): int
+    {
+        $showAll = $input->getOption('all');
+
+        $io->text('Scanning bloqs...');
+
+        $collection = $iris->bloqs->list();
+        $bloqs = $collection->toArray();
+
+        if (empty($bloqs)) {
+            $io->warning('No bloqs found.');
+
+            return Command::SUCCESS;
+        }
+
+        $withMembers = [];
+        $withoutMembers = [];
+
+        $io->progressStart(count($bloqs));
+
+        foreach ($bloqs as $bloq) {
+            $bloqId = $bloq['id'] ?? null;
+            if (! $bloqId) {
+                $io->progressAdvance();
+                continue;
+            }
+
+            try {
+                $membersResponse = $iris->bloqs->getSharedUsers($bloqId);
+                $members = $membersResponse['shared_users'] ?? $membersResponse['data'] ?? $membersResponse;
+
+                // Normalize single-object response
+                if (! empty($members) && ! isset($members[0]) && isset($members['id'])) {
+                    $members = [$members];
+                }
+
+                $count = is_array($members) ? count($members) : 0;
+                $entry = [
+                    'id' => $bloqId,
+                    'name' => mb_substr($bloq['name'] ?? $bloq['title'] ?? '-', 0, 45),
+                    'members' => $count,
+                ];
+
+                if ($count > 0) {
+                    $withMembers[] = $entry;
+                } else {
+                    $withoutMembers[] = $entry;
+                }
+            } catch (\Exception $e) {
+                $withoutMembers[] = [
+                    'id' => $bloqId,
+                    'name' => mb_substr($bloq['name'] ?? $bloq['title'] ?? '-', 0, 45),
+                    'members' => 0,
+                ];
+            }
+
+            $io->progressAdvance();
+        }
+
+        $io->progressFinish();
+
+        if ($input->getOption('json')) {
+            $io->writeln(json_encode([
+                'with_members' => $withMembers,
+                'without_members' => $withoutMembers,
+                'summary' => [
+                    'total_bloqs' => count($bloqs),
+                    'with_members' => count($withMembers),
+                    'without_members' => count($withoutMembers),
+                ],
+            ], JSON_PRETTY_PRINT));
+
+            return Command::SUCCESS;
+        }
+
+        $io->title('Bloq Member Overview');
+
+        // Sort by member count descending
+        usort($withMembers, fn($a, $b) => $b['members'] <=> $a['members']);
+
+        if (! empty($withMembers)) {
+            $table = new Table($io);
+            $table->setHeaders(['ID', 'Bloq', 'Members']);
+
+            foreach ($withMembers as $entry) {
+                $table->addRow([$entry['id'], $entry['name'], $entry['members']]);
+            }
+
+            if (! $showAll && count($withoutMembers) > 0) {
+                $table->addRow(new \Symfony\Component\Console\Helper\TableSeparator());
+                $table->addRow(['', '<fg=gray>' . count($withoutMembers) . ' bloqs with no members (use --all to show)</>', '']);
+            }
+
+            $table->render();
+        }
+
+        if ($showAll && ! empty($withoutMembers)) {
+            $io->section('Bloqs Without Members');
+            $table = new Table($io);
+            $table->setHeaders(['ID', 'Bloq', 'Members']);
+
+            foreach ($withoutMembers as $entry) {
+                $table->addRow([$entry['id'], '<fg=gray>' . $entry['name'] . '</>', '<fg=gray>0</>']);
+            }
+
+            $table->render();
+        }
+
+        $io->text(count($withMembers) . ' bloqs with members, ' . count($withoutMembers) . ' without.');
+
+        return Command::SUCCESS;
+    }
+
+    /**
      * List all members of a bloq.
      */
     private function listMembers(IRIS $iris, InputInterface $input, SymfonyStyle $io): int
     {
-        $bloqId = (int) $input->getArgument('bloq-id');
+        $bloqId = $input->getArgument('bloq-id');
+        if (! $bloqId) {
+            $io->error('Bloq ID required. Usage: iris team list <bloq_id>');
+
+            return Command::FAILURE;
+        }
+        $bloqId = (int) $bloqId;
 
         $response = $iris->bloqs->getSharedUsers($bloqId);
         $members = $response['shared_users'] ?? $response['data'] ?? $response;

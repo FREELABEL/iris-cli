@@ -33,8 +33,8 @@ class ScheduleCommand extends Command
         $this
             ->setName('schedule')
             ->setDescription('Manage agent scheduled jobs and execution history')
-            ->setHelp('Commands: status, list, create, run, reset, reset-all, history, agent-history, all-history, execution, sync')
-            ->addArgument('action', InputArgument::REQUIRED, 'Action: status|list|create|run|reset|reset-all|history|agent-history|all-history|execution|sync')
+            ->setHelp('Commands: status, list, create, run, reset, reset-all, history, agent-history, all-history, execution, sync, heartbeat, recent')
+            ->addArgument('action', InputArgument::REQUIRED, 'Action: status|list|create|run|reset|reset-all|history|agent-history|all-history|execution|sync|heartbeat|recent')
             ->addArgument('id', InputArgument::OPTIONAL, 'Job ID or Agent ID (depending on action)')
             ->addOption('agent-id', 'a', InputOption::VALUE_REQUIRED, 'Filter by agent ID')
             ->addOption('task-name', 't', InputOption::VALUE_REQUIRED, 'Task name (for create)')
@@ -43,6 +43,7 @@ class ScheduleCommand extends Command
             ->addOption('frequency', 'f', InputOption::VALUE_REQUIRED, 'Frequency: daily|weekly|monthly|once', 'daily')
             ->addOption('status', 's', InputOption::VALUE_REQUIRED, 'Filter by status: completed|failed')
             ->addOption('limit', 'l', InputOption::VALUE_REQUIRED, 'Limit results', 20)
+            ->addOption('hours', null, InputOption::VALUE_REQUIRED, 'Time window in hours (for recent)', 24)
             ->addOption('json', null, InputOption::VALUE_NONE, 'Output as JSON')
             ->addOption('api-key', null, InputOption::VALUE_REQUIRED, 'API key')
             ->addOption('user-id', null, InputOption::VALUE_REQUIRED, 'User ID');
@@ -99,8 +100,14 @@ class ScheduleCommand extends Command
                 case 'sync':
                     return $this->syncAgent($iris, $input, $io);
 
+                case 'heartbeat':
+                    return $this->showHeartbeat($iris, $input, $io);
+
+                case 'recent':
+                    return $this->showRecent($iris, $input, $io);
+
                 default:
-                    $io->error("Unknown action: {$action}. Use: status|list|create|run|reset|reset-all|history|agent-history|all-history|execution|sync");
+                    $io->error("Unknown action: {$action}. Use: status|list|create|run|reset|reset-all|history|agent-history|all-history|execution|sync|heartbeat|recent");
                     return Command::FAILURE;
             }
         } catch (\Exception $e) {
@@ -906,5 +913,200 @@ class ScheduleCommand extends Command
             $io->error('Failed to get job details: ' . $e->getMessage());
             return Command::FAILURE;
         }
+    }
+
+    /**
+     * Show agents with heartbeat enabled and their recent run status.
+     */
+    protected function showHeartbeat(IRIS $iris, InputInterface $input, SymfonyStyle $io): int
+    {
+        $io->text('Fetching agents...');
+
+        $agentsResponse = $iris->agents->list();
+        $agents = [];
+        foreach ($agentsResponse as $agent) {
+            $agents[] = is_object($agent) && method_exists($agent, 'toArray')
+                ? $agent->toArray()
+                : (array) $agent;
+        }
+
+        // Filter agents with heartbeat enabled
+        $heartbeatAgents = array_filter($agents, function ($agent) {
+            $mode = $agent['heartbeat_mode'] ?? null;
+
+            return $mode !== null && $mode !== 'off' && $mode !== '';
+        });
+
+        // Get scheduled jobs for cross-reference
+        $jobsResponse = $iris->schedules->list(['agent_jobs_only' => true]);
+        $jobs = $jobsResponse['data'] ?? $jobsResponse ?? [];
+
+        // Index jobs by agent_id for quick lookup
+        $jobsByAgent = [];
+        foreach ($jobs as $job) {
+            $agentId = $job['agent_id'] ?? null;
+            if ($agentId) {
+                $jobsByAgent[$agentId] = $job;
+            }
+        }
+
+        if ($input->getOption('json')) {
+            $result = [];
+            foreach ($heartbeatAgents as $agent) {
+                $agentId = $agent['id'] ?? null;
+                $job = $jobsByAgent[$agentId] ?? null;
+                $result[] = [
+                    'agent_id' => $agentId,
+                    'agent_name' => $agent['name'] ?? '-',
+                    'heartbeat_mode' => $agent['heartbeat_mode'] ?? '-',
+                    'bloq_id' => $agent['bloq_id'] ?? null,
+                    'job_status' => $job['status'] ?? null,
+                    'last_run_at' => $job['last_run_at'] ?? null,
+                    'run_count' => $job['run_count'] ?? 0,
+                ];
+            }
+            $io->writeln(json_encode($result, JSON_PRETTY_PRINT));
+
+            return Command::SUCCESS;
+        }
+
+        if (empty($heartbeatAgents)) {
+            $io->info('No agents with heartbeat enabled.');
+
+            return Command::SUCCESS;
+        }
+
+        $io->title('Heartbeat-Enabled Agents');
+
+        $table = new Table($io);
+        $table->setHeaders(['ID', 'Agent', 'Mode', 'Bloq', 'Job Status', 'Last Run', 'Runs']);
+
+        $modeCounts = ['passive' => 0, 'reactive' => 0];
+
+        foreach ($heartbeatAgents as $agent) {
+            $agentId = $agent['id'] ?? null;
+            $mode = $agent['heartbeat_mode'] ?? '-';
+            $job = $jobsByAgent[$agentId] ?? null;
+
+            if (isset($modeCounts[$mode])) {
+                $modeCounts[$mode]++;
+            }
+
+            $lastRun = $job['last_run_at'] ?? null;
+            $lastRunDisplay = $lastRun ? mb_substr($lastRun, 0, 16) : 'never';
+
+            $jobStatus = $job ? $this->formatStatus($job['status'] ?? '-') : '<fg=gray>-</>';
+
+            $table->addRow([
+                $agentId,
+                mb_substr($agent['name'] ?? '-', 0, 30),
+                $mode,
+                $agent['bloq_id'] ? '#' . $agent['bloq_id'] : '-',
+                $jobStatus,
+                $lastRunDisplay,
+                $job['run_count'] ?? 0,
+            ]);
+        }
+
+        $table->render();
+
+        $parts = [];
+        foreach ($modeCounts as $mode => $count) {
+            if ($count > 0) {
+                $parts[] = "{$mode}: {$count}";
+            }
+        }
+        $summary = count($heartbeatAgents) . ' agents with heartbeat enabled';
+        if (! empty($parts)) {
+            $summary .= ' (' . implode(', ', $parts) . ')';
+        }
+        $io->text($summary);
+
+        return Command::SUCCESS;
+    }
+
+    /**
+     * Show jobs that ran within a time window (default: last 24 hours).
+     */
+    protected function showRecent(IRIS $iris, InputInterface $input, SymfonyStyle $io): int
+    {
+        $hours = (int) $input->getOption('hours');
+        if ($hours <= 0) {
+            $hours = 24;
+        }
+
+        $cutoff = new \DateTime("-{$hours} hours", new \DateTimeZone('UTC'));
+
+        $response = $iris->schedules->list(['agent_jobs_only' => true]);
+        $jobs = $response['data'] ?? $response ?? [];
+
+        // Filter by last_run_at within the time window
+        $recentJobs = array_filter($jobs, function ($job) use ($cutoff) {
+            $lastRun = $job['last_run_at'] ?? null;
+            if (! $lastRun) {
+                return false;
+            }
+
+            try {
+                $runDate = new \DateTime($lastRun);
+
+                return $runDate >= $cutoff;
+            } catch (\Exception $e) {
+                return false;
+            }
+        });
+
+        // Sort by most recent first
+        usort($recentJobs, function ($a, $b) {
+            return ($b['last_run_at'] ?? '') <=> ($a['last_run_at'] ?? '');
+        });
+
+        if ($input->getOption('json')) {
+            $io->writeln(json_encode([
+                'hours' => $hours,
+                'cutoff' => $cutoff->format('Y-m-d H:i:s'),
+                'count' => count($recentJobs),
+                'jobs' => array_values($recentJobs),
+            ], JSON_PRETTY_PRINT));
+
+            return Command::SUCCESS;
+        }
+
+        $io->title("Recent Runs (last {$hours}h)");
+
+        if (empty($recentJobs)) {
+            $io->info("No jobs ran in the last {$hours} hours.");
+
+            return Command::SUCCESS;
+        }
+
+        $table = new Table($io);
+        $table->setHeaders(['ID', 'Agent', 'Task', 'Status', 'Last Run', 'Runs']);
+
+        $statusCounts = [];
+
+        foreach ($recentJobs as $job) {
+            $status = $job['status'] ?? 'unknown';
+            $statusCounts[$status] = ($statusCounts[$status] ?? 0) + 1;
+
+            $table->addRow([
+                $job['id'],
+                mb_substr($job['agent']['name'] ?? $job['agent_id'] ?? '-', 0, 25),
+                mb_substr($job['task_name'] ?? '-', 0, 25),
+                $this->formatStatus($status),
+                mb_substr($job['last_run_at'] ?? '-', 0, 16),
+                $job['run_count'] ?? 0,
+            ]);
+        }
+
+        $table->render();
+
+        $parts = [];
+        foreach ($statusCounts as $status => $count) {
+            $parts[] = "{$status}: {$count}";
+        }
+        $io->text(count($recentJobs) . ' jobs ran in the last ' . $hours . ' hours (' . implode(', ', $parts) . ')');
+
+        return Command::SUCCESS;
     }
 }
