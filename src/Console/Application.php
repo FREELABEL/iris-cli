@@ -49,6 +49,7 @@ use IRIS\SDK\Console\Commands\OutreachCommand;
 use IRIS\SDK\Console\Commands\OutreachCampaignCommand;
 use IRIS\SDK\Console\Commands\OutreachSendCommand;
 use IRIS\SDK\Console\Commands\CallCommand;
+use IRIS\SDK\Console\Commands\BloqMembersCommand;
 
 class Application extends BaseApplication
 {
@@ -99,6 +100,7 @@ class Application extends BaseApplication
             new CloudUploadCommand(),
             new DiaryCommand(),
             new BloqsCommand(),
+            new BloqMembersCommand(),
             new OutreachCommand(),
             new OutreachCampaignCommand(),
             new OutreachSendCommand(),
