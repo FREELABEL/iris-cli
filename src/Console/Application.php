@@ -50,6 +50,7 @@ use IRIS\SDK\Console\Commands\OutreachCampaignCommand;
 use IRIS\SDK\Console\Commands\OutreachSendCommand;
 use IRIS\SDK\Console\Commands\CallCommand;
 use IRIS\SDK\Console\Commands\BloqMembersCommand;
+use IRIS\SDK\Console\Commands\MonitorCommand;
 
 class Application extends BaseApplication
 {
@@ -105,6 +106,7 @@ class Application extends BaseApplication
             new OutreachCampaignCommand(),
             new OutreachSendCommand(),
             new CallCommand(),
+            new MonitorCommand(),
         ]);
     }
 }
