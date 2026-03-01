@@ -167,7 +167,7 @@ class Client
             return $this->config->flApiUrl . '/' . ltrim($endpoint, '/');
         }
 
-        // Use IRIS URL for workflow/chat/memory endpoints (iris-api)
+        // Use IRIS URL for workflow/chat/memory/monitor endpoints (iris-api)
         if (str_contains($endpoint, '/iris/')
             || str_contains($endpoint, '/chat/')
             || str_contains($endpoint, '/workflows/')
@@ -175,6 +175,7 @@ class Client
             || str_contains($endpoint, '/v6/secrets')
             || str_contains($endpoint, '/v6/diary')
             || str_contains($endpoint, '/v6/skills')
+            || str_contains($endpoint, '/monitor/')
         ) {
             return $this->config->irisUrl . '/' . ltrim($endpoint, '/');
         }
@@ -307,7 +308,12 @@ class Client
         $data = json_decode($body, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new IRISException('Invalid JSON response: ' . json_last_error_msg());
+            return ['success' => true, 'raw' => $body];
+        }
+
+        // json_decode can return scalars (bool, string, int) for non-object/array JSON
+        if (!is_array($data)) {
+            return ['success' => true, 'value' => $data];
         }
 
         // Handle wrapped responses — preserve pagination envelope
@@ -315,6 +321,11 @@ class Client
             if (isset($data['total']) || isset($data['current_page']) || isset($data['last_page'])) {
                 // Paginated response — keep the full envelope so meta is available
                 return $data;
+            }
+
+            // data key may be a scalar (e.g. delete returns {"data": "success message"})
+            if (!is_array($data['data'])) {
+                return ['success' => true, 'message' => $data['data']];
             }
 
             return $data['data'];

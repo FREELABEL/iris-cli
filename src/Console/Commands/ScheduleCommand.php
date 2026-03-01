@@ -1022,6 +1022,50 @@ class ScheduleCommand extends Command
         }
         $io->text($summary);
 
+        // Enrich with monitor data (alerts, health status)
+        try {
+            $monitorData = $iris->monitor->overview(24);
+            $data = $monitorData['data'] ?? $monitorData;
+
+            $alerts = $data['alerts'] ?? [];
+            if (! empty($alerts)) {
+                $io->section('Alerts');
+                foreach ($alerts as $alert) {
+                    $severity = $alert['severity'] ?? 'info';
+                    $icon = match ($severity) {
+                        'critical' => '<fg=red>CRITICAL</>',
+                        'warning' => '<fg=yellow>WARNING</>',
+                        default => '<fg=gray>INFO</>',
+                    };
+                    $io->text("  {$icon} [{$alert['type']}] {$alert['message']} (agent #{$alert['agent_id']})");
+                }
+            }
+
+            // Show top token burners among heartbeat agents
+            $topAgents = $data['top_agents'] ?? [];
+            $heartbeatIds = array_map(fn($a) => $a['id'] ?? null, $heartbeatAgents);
+            $heartbeatBurners = array_filter($topAgents, fn($a) => in_array($a['agent_id'] ?? null, $heartbeatIds));
+            if (! empty($heartbeatBurners)) {
+                $io->section('Token Burn (24h)');
+                $table = new Table($io);
+                $table->setHeaders(['Agent', 'Executions', 'Tokens', 'Failed']);
+                foreach ($heartbeatBurners as $a) {
+                    $table->addRow([
+                        mb_substr($a['name'] ?? '-', 0, 25),
+                        $a['total_executions'] ?? 0,
+                        number_format($a['total_tokens'] ?? 0),
+                        ($a['failed'] ?? 0) > 0 ? '<fg=red>' . $a['failed'] . '</>' : '0',
+                    ]);
+                }
+                $table->render();
+            }
+        } catch (\Exception $e) {
+            // Monitor endpoint may not be available — non-blocking
+        }
+
+        $io->text('');
+        $io->text('<fg=gray>Deep dive: iris monitor agent <id> | Kill switch: iris monitor kill <id></>');
+
         return Command::SUCCESS;
     }
 
