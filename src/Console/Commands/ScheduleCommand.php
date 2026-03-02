@@ -941,11 +941,23 @@ class ScheduleCommand extends Command
         $jobsResponse = $iris->schedules->list(['agent_jobs_only' => true]);
         $jobs = $jobsResponse['data'] ?? $jobsResponse ?? [];
 
-        // Index jobs by agent_id for quick lookup
+        // Index heartbeat jobs by agent_id — prefer the heartbeat task_name,
+        // and pick the one with the highest run_count if multiple exist.
         $jobsByAgent = [];
         foreach ($jobs as $job) {
             $agentId = $job['agent_id'] ?? null;
-            if ($agentId) {
+            if (! $agentId) {
+                continue;
+            }
+            $taskName = $job['task_name'] ?? '';
+            $existing = $jobsByAgent[$agentId] ?? null;
+
+            // Prefer heartbeat-named jobs
+            $isHeartbeat = $taskName === 'heartbeat';
+            $existingIsHeartbeat = $existing && ($existing['task_name'] ?? '') === 'heartbeat';
+
+            if (! $existing || ($isHeartbeat && ! $existingIsHeartbeat)
+                || ($isHeartbeat === $existingIsHeartbeat && ($job['run_count'] ?? 0) > ($existing['run_count'] ?? 0))) {
                 $jobsByAgent[$agentId] = $job;
             }
         }
@@ -959,7 +971,7 @@ class ScheduleCommand extends Command
                     'agent_id' => $agentId,
                     'agent_name' => $agent['name'] ?? '-',
                     'heartbeat_mode' => $agent['heartbeat_mode'] ?? '-',
-                    'bloq_id' => $agent['bloq_id'] ?? null,
+                    'bloq_id' => $job['bloq_id'] ?? $agent['bloq_id'] ?? null,
                     'job_status' => $job['status'] ?? null,
                     'last_run_at' => $job['last_run_at'] ?? null,
                     'run_count' => $job['run_count'] ?? 0,
@@ -974,6 +986,23 @@ class ScheduleCommand extends Command
             $io->info('No agents with heartbeat enabled.');
 
             return Command::SUCCESS;
+        }
+
+        // Pre-fetch monitor data for monitored bloqs enrichment
+        $monitorBloqMap = [];
+        try {
+            $monitorData = $iris->monitor->overview(24);
+            $monitorDataParsed = $monitorData['data'] ?? $monitorData;
+            $hbAgents = $monitorDataParsed['heartbeat_agents'] ?? [];
+            foreach ($hbAgents as $hba) {
+                $hbaObj = (array) $hba;
+                $aid = $hbaObj['id'] ?? null;
+                if ($aid && ! empty($hbaObj['monitored_bloqs'])) {
+                    $monitorBloqMap[$aid] = $hbaObj['monitored_bloqs'];
+                }
+            }
+        } catch (\Exception $e) {
+            // Non-blocking — enrichment will just be skipped
         }
 
         $io->title('Heartbeat-Enabled Agents');
@@ -997,11 +1026,20 @@ class ScheduleCommand extends Command
 
             $jobStatus = $job ? $this->formatStatus($job['status'] ?? '-') : '<fg=gray>-</>';
 
+            // Show monitored bloqs — use the enriched list from overview API
+            $monitoredBloqs = $monitorBloqMap[$agentId] ?? [];
+            if (! empty($monitoredBloqs)) {
+                $bloqDisplay = implode(',', array_map(fn($id) => '#' . $id, $monitoredBloqs));
+            } else {
+                $bloqId = $job['bloq_id'] ?? $agent['bloq_id'] ?? null;
+                $bloqDisplay = $bloqId ? '#' . $bloqId : '-';
+            }
+
             $table->addRow([
                 $agentId,
                 mb_substr($agent['name'] ?? '-', 0, 30),
                 $mode,
-                $agent['bloq_id'] ? '#' . $agent['bloq_id'] : '-',
+                $bloqDisplay,
                 $jobStatus,
                 $lastRunDisplay,
                 $job['run_count'] ?? 0,
@@ -1024,8 +1062,12 @@ class ScheduleCommand extends Command
 
         // Enrich with monitor data (alerts, health status)
         try {
-            $monitorData = $iris->monitor->overview(24);
-            $data = $monitorData['data'] ?? $monitorData;
+            // Reuse data if already fetched above, otherwise fetch now
+            if (empty($monitorDataParsed)) {
+                $monitorData = $iris->monitor->overview(24);
+                $monitorDataParsed = $monitorData['data'] ?? $monitorData;
+            }
+            $data = $monitorDataParsed;
 
             $alerts = $data['alerts'] ?? [];
             if (! empty($alerts)) {

@@ -243,27 +243,39 @@ class MonitorCommand extends Command
             ]
         );
 
-        // Stats summary
+        // Stats summary (all-time from API, windowed shown as annotation)
         $stats = $data['stats'] ?? [];
         if (! empty($stats)) {
-            $io->section('Stats (last ' . $hours . 'h)');
+            $io->section('Stats (All Time)');
             $failCount = $stats['failed'] ?? 0;
             $totalExec = $stats['total_executions'] ?? 0;
             $successRate = $totalExec > 0
                 ? round((($stats['completed'] ?? 0) / $totalExec) * 100, 1) . '%'
                 : '-';
 
-            $io->table(
-                ['Metric', 'Value'],
-                [
-                    ['Total Executions', $totalExec],
-                    ['Completed', '<fg=green>' . ($stats['completed'] ?? 0) . '</>'],
-                    ['Failed', $failCount > 0 ? '<fg=red>' . $failCount . '</>' : '0'],
-                    ['Success Rate', $successRate],
-                    ['Total Tokens', number_format($stats['total_tokens'] ?? 0)],
-                    ['Active Jobs', $stats['active_jobs'] ?? 0],
-                ]
-            );
+            $rows = [
+                ['Total Executions', $totalExec],
+                ['Completed', '<fg=green>' . ($stats['completed'] ?? 0) . '</>'],
+                ['Failed', $failCount > 0 ? '<fg=red>' . $failCount . '</>' : '0'],
+                ['Success Rate', $successRate],
+                ['Total Tokens', number_format($stats['total_tokens'] ?? 0)],
+                ['Active Jobs', $stats['active_jobs'] ?? 0],
+            ];
+
+            if (isset($stats['heartbeat_run_count'])) {
+                $rows[] = ['Heartbeat Cycles', $stats['heartbeat_run_count']];
+            }
+
+            $io->table(['Metric', 'Value'], $rows);
+
+            // Windowed stats annotation
+            $windowed = $data['stats_windowed'] ?? [];
+            if (! empty($windowed) && ($windowed['total_executions'] ?? 0) > 0) {
+                $wHours = $windowed['window_hours'] ?? $hours;
+                $io->text("<fg=gray>Last {$wHours}h: {$windowed['total_executions']} executions, "
+                    . number_format($windowed['total_tokens'] ?? 0) . ' tokens</>'
+                );
+            }
         }
 
         // Rapid-fire detection
