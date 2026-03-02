@@ -34,10 +34,16 @@ class BloqsCommand extends Command
             ->setName('bloqs')
             ->setAliases(['projects', 'boards'])
             ->setDescription('Manage bloqs, projects, and boards')
-            ->setHelp('Commands: list, search, show, overview, archive, merge')
-            ->addArgument('action', InputArgument::REQUIRED, 'Action: list|search|show|overview|archive|merge')
-            ->addArgument('id', InputArgument::OPTIONAL, 'Bloq ID (for show/archive) or search query (for search) or source ID (for merge)')
-            ->addArgument('extra', InputArgument::OPTIONAL, 'Target bloq ID (for merge)')
+            ->setHelp('Commands: list, search, show, overview, archive, merge, goals')
+            ->addArgument('action', InputArgument::REQUIRED, 'Action: list|search|show|overview|archive|merge|goals')
+            ->addArgument('id', InputArgument::OPTIONAL, 'Bloq ID (for show/archive/goals) or search query (for search) or source ID (for merge)')
+            ->addArgument('extra', InputArgument::OPTIONAL, 'Target bloq ID (for merge) or goal text (for goals --add)')
+            ->addOption('add', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Add goal(s) — repeatable (for goals action)')
+            ->addOption('remove', null, InputOption::VALUE_REQUIRED, 'Remove goal by number (for goals action)')
+            ->addOption('clear', null, InputOption::VALUE_NONE, 'Clear all goals (for goals action)')
+            ->addOption('industry', null, InputOption::VALUE_REQUIRED, 'Set industry (for goals action)')
+            ->addOption('audience', null, InputOption::VALUE_REQUIRED, 'Set target audience (for goals action)')
+            ->addOption('summary', null, InputOption::VALUE_REQUIRED, 'Set business summary (for goals action)')
             ->addOption('limit', 'l', InputOption::VALUE_REQUIRED, 'Max results', '50')
             ->addOption('json', null, InputOption::VALUE_NONE, 'Output as JSON')
             ->addOption('api-key', null, InputOption::VALUE_REQUIRED, 'API key')
@@ -80,9 +86,13 @@ class BloqsCommand extends Command
                     return $this->archiveBloq($iris, $input, $io);
                 case 'merge':
                     return $this->mergeBloqs($iris, $input, $io);
+                case 'goals':
+                case 'goal':
+                case 'context':
+                    return $this->manageGoals($iris, $input, $io);
                 default:
                     $io->error("Unknown action: {$action}");
-                    $io->text('Available actions: list, search, show, overview, archive, merge');
+                    $io->text('Available actions: list, search, show, overview, archive, merge, goals');
 
                     return Command::FAILURE;
             }
@@ -498,6 +508,203 @@ class BloqsCommand extends Command
 
         $io->newLine();
         $io->success("Merged {$totalLists} lists, {$totalItems} items into \"{$target->title}\". Source archived.");
+
+        return Command::SUCCESS;
+    }
+
+    /**
+     * Manage business goals for a bloq.
+     */
+    private function manageGoals(IRIS $iris, InputInterface $input, SymfonyStyle $io): int
+    {
+        $id = $input->getArgument('id');
+
+        if (! $id || ! is_numeric($id)) {
+            $io->error('Bloq ID required. Usage: iris bloqs goals <id>');
+            $io->newLine();
+            $io->text('Examples:');
+            $io->text('  iris bloqs goals 38                                    # View goals');
+            $io->text('  iris bloqs goals 38 --add "Increase leads by 20%"      # Add a goal');
+            $io->text('  iris bloqs goals 38 --remove 2                         # Remove goal #2');
+            $io->text('  iris bloqs goals 38 --clear                            # Clear all goals');
+            $io->text('  iris bloqs goals 38 --industry "Media & Entertainment" # Set industry');
+            $io->text('  iris bloqs goals 38 --audience "AI engineers"           # Set audience');
+            $io->text('  iris bloqs goals 38 --summary "Platform for..."         # Set summary');
+
+            return Command::FAILURE;
+        }
+
+        $bloqId = (int) $id;
+
+        // Fetch current business context
+        try {
+            $response = $iris->bloqs->getBusinessContext($bloqId);
+        } catch (\Exception $e) {
+            $io->error("Failed to fetch business context for bloq #{$bloqId}: " . $e->getMessage());
+
+            return Command::FAILURE;
+        }
+
+        $context = $response['business_context'] ?? $response['data']['business_context'] ?? [];
+        if (! is_array($context)) {
+            $context = [];
+        }
+
+        $goals = $context['desired_outcomes']['primary_goals'] ?? [];
+        $addGoals = $input->getOption('add');
+        $removeGoal = $input->getOption('remove');
+        $clearGoals = $input->getOption('clear');
+        $industry = $input->getOption('industry');
+        $audience = $input->getOption('audience');
+        $summary = $input->getOption('summary');
+        $isWrite = ! empty($addGoals) || $removeGoal || $clearGoals || $industry || $audience || $summary;
+
+        // --- WRITE OPERATIONS ---
+        if ($isWrite) {
+            // Apply industry/audience/summary updates
+            if ($industry) {
+                $context['industry'] = $industry;
+            }
+            if ($audience) {
+                $context['target_audience'] = $audience;
+            }
+            if ($summary) {
+                $context['summary'] = $summary;
+            }
+
+            // Apply goal mutations
+            if ($clearGoals) {
+                $goals = [];
+                $io->text('Cleared all goals.');
+            }
+
+            if ($removeGoal) {
+                $idx = (int) $removeGoal - 1;
+                if ($idx < 0 || $idx >= count($goals)) {
+                    $io->error("Goal #{$removeGoal} does not exist. There are " . count($goals) . ' goals.');
+
+                    return Command::FAILURE;
+                }
+                $removed = $goals[$idx];
+                array_splice($goals, $idx, 1);
+                $io->text("Removed goal: {$removed}");
+            }
+
+            if (! empty($addGoals)) {
+                foreach ($addGoals as $newGoal) {
+                    $goals[] = $newGoal;
+                    $io->text("Added goal: {$newGoal}");
+                }
+            }
+
+            // Write back
+            $context['desired_outcomes'] = array_merge(
+                $context['desired_outcomes'] ?? [],
+                ['primary_goals' => array_values($goals)]
+            );
+
+            try {
+                $iris->bloqs->updateBusinessContext($bloqId, $context);
+                $io->success("Business context updated for bloq #{$bloqId}.");
+            } catch (\Exception $e) {
+                $io->error('Failed to update: ' . $e->getMessage());
+
+                return Command::FAILURE;
+            }
+        }
+
+        // --- DISPLAY CURRENT STATE ---
+        // Re-fetch after write to show latest
+        if ($isWrite) {
+            $response = $iris->bloqs->getBusinessContext($bloqId);
+            $context = $response['business_context'] ?? $response['data']['business_context'] ?? [];
+            if (! is_array($context)) {
+                $context = [];
+            }
+            $goals = $context['desired_outcomes']['primary_goals'] ?? [];
+        }
+
+        // Find bloq title
+        $bloqTitle = "Bloq #{$bloqId}";
+        try {
+            $bloq = $this->findBloqById($iris, $bloqId);
+            if ($bloq) {
+                $bloqTitle = $bloq->title;
+            }
+        } catch (\Exception $e) {
+            // title lookup is non-critical
+        }
+
+        if ($input->getOption('json')) {
+            $io->writeln(json_encode([
+                'bloq_id' => $bloqId,
+                'title' => $bloqTitle,
+                'business_context' => $context,
+            ], JSON_PRETTY_PRINT));
+
+            return Command::SUCCESS;
+        }
+
+        $io->title("Goals: {$bloqTitle}");
+
+        // Profile section
+        $profileRows = [
+            ['Industry', $context['industry'] ?? '<fg=yellow>Not set</>'],
+            ['Business Type', $context['business_type'] ?? '<fg=yellow>Not set</>'],
+            ['Target Audience', $context['target_audience'] ?? '<fg=yellow>Not set</>'],
+            ['Tone', $context['tone'] ?? '<fg=yellow>Not set</>'],
+            ['Entity Type', $context['entity_type'] ?? '<fg=yellow>Not set</>'],
+        ];
+
+        if (! empty($context['summary'])) {
+            $summaryText = mb_strlen($context['summary']) > 80
+                ? mb_substr($context['summary'], 0, 80) . '...'
+                : $context['summary'];
+            $profileRows[] = ['Summary', $summaryText];
+        }
+
+        $io->section('Business Profile');
+        $io->table(['Field', 'Value'], $profileRows);
+
+        // Services
+        $services = $context['services'] ?? [];
+        if (! empty($services)) {
+            $io->text('<fg=cyan>Services:</> ' . implode(', ', $services));
+        }
+
+        // Keywords
+        $keywords = $context['keywords'] ?? [];
+        if (! empty($keywords)) {
+            $io->text('<fg=cyan>Keywords:</> ' . implode(', ', $keywords));
+        }
+
+        // Goals
+        $io->section('Primary Goals');
+
+        if (empty($goals)) {
+            $io->warning('No goals defined. Heartbeat effectiveness is limited without goals.');
+            $io->newLine();
+            $io->text('Set goals with:');
+            $io->text("  iris bloqs goals {$bloqId} --add \"Increase monthly revenue by 20%\"");
+            $io->text("  iris bloqs goals {$bloqId} --add \"Launch email campaign to 500 leads\"");
+            $io->text("  iris bloqs goals {$bloqId} --add \"Publish 3 blog posts per week\"");
+        } else {
+            foreach ($goals as $i => $goal) {
+                $num = $i + 1;
+                $io->text("  <fg=green>{$num}.</> {$goal}");
+            }
+            $io->newLine();
+            $io->text('<fg=gray>Manage: --add "Goal text" | --remove <n> | --clear</>');
+        }
+
+        // Efficiency opportunities
+        $opportunities = $context['strategic_insights']['efficiency_opportunities'] ?? [];
+        if (! empty($opportunities)) {
+            $io->section('Efficiency Opportunities');
+            foreach ($opportunities as $opp) {
+                $io->text("  - {$opp}");
+            }
+        }
 
         return Command::SUCCESS;
     }

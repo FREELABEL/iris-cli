@@ -258,7 +258,7 @@ class MonitorCommand extends Command
                 ['Completed', '<fg=green>' . ($stats['completed'] ?? 0) . '</>'],
                 ['Failed', $failCount > 0 ? '<fg=red>' . $failCount . '</>' : '0'],
                 ['Success Rate', $successRate],
-                ['Total Tokens', number_format($stats['total_tokens'] ?? 0)],
+                ['Total Tokens', number_format((int) ($stats['total_tokens'] ?? 0))],
                 ['Active Jobs', $stats['active_jobs'] ?? 0],
             ];
 
