@@ -564,6 +564,73 @@ class BloqsResource
     }
 
     // =========================================================================
+    // BUSINESS CONTEXT & GOALS
+    // =========================================================================
+
+    /**
+     * Get business context for a bloq.
+     *
+     * @param int $bloqId Bloq ID
+     * @return array Business context data
+     */
+    public function getBusinessContext(int $bloqId): array
+    {
+        return $this->http->get("/api/v1/bloqs/{$bloqId}/business-context");
+    }
+
+    /**
+     * Update business context for a bloq.
+     *
+     * @param int $bloqId Bloq ID
+     * @param array $context Business context data
+     * @return array Updated business context
+     */
+    public function updateBusinessContext(int $bloqId, array $context): array
+    {
+        return $this->http->patch("/api/v1/bloqs/{$bloqId}/business-context", [
+            'business_context' => $context,
+        ]);
+    }
+
+    /**
+     * Get business goals for a bloq.
+     *
+     * @param int $bloqId Bloq ID
+     * @return array Goals list
+     */
+    public function getGoals(int $bloqId): array
+    {
+        $response = $this->getBusinessContext($bloqId);
+        $context = $response['business_context'] ?? $response['data']['business_context'] ?? [];
+
+        return $context['desired_outcomes']['primary_goals'] ?? [];
+    }
+
+    /**
+     * Set business goals for a bloq, preserving existing business context.
+     *
+     * @param int $bloqId Bloq ID
+     * @param array $goals Array of goal strings
+     * @return array Updated business context
+     */
+    public function setGoals(int $bloqId, array $goals): array
+    {
+        $response = $this->getBusinessContext($bloqId);
+        $context = $response['business_context'] ?? $response['data']['business_context'] ?? [];
+
+        if (! is_array($context)) {
+            $context = [];
+        }
+
+        $context['desired_outcomes'] = array_merge(
+            $context['desired_outcomes'] ?? [],
+            ['primary_goals' => $goals]
+        );
+
+        return $this->updateBusinessContext($bloqId, $context);
+    }
+
+    // =========================================================================
     // SHARING & COLLABORATION
     // =========================================================================
 
