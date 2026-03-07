@@ -38,18 +38,25 @@ class ItemsResource
      */
     public function list(array $filters = []): BloqItemCollection
     {
-        $userId = $this->config->requireUserId();
         $response = $this->http->get(
-            "/api/v1/users/{$userId}/bloqs/{$this->listId}/items",
+            "/api/v1/user/bloqs/lists/{$this->listId}/items",
             $filters
         );
 
+        $rawItems = $response['data'] ?? [];
+
+        // Guard against non-array responses (e.g. {"success": true} from empty endpoints)
+        if (!is_array($rawItems) || (isset($rawItems['success']) && count($rawItems) === 1)) {
+            $rawItems = [];
+        }
+
+        // Filter out non-array entries (e.g. scalar values from malformed responses)
         $items = array_map(
             fn($data) => new BloqItem($data),
-            $response['data'] ?? $response
+            array_filter($rawItems, 'is_array')
         );
 
-        return new BloqItemCollection($items, $response['meta'] ?? []);
+        return new BloqItemCollection(array_values($items), $response['meta'] ?? []);
     }
 
     /**
@@ -60,9 +67,8 @@ class ItemsResource
      */
     public function get(int $itemId): BloqItem
     {
-        $userId = $this->config->requireUserId();
         $response = $this->http->get(
-            "/api/v1/user/{$userId}/bloqs/list/item/{$itemId}"
+            "/api/v1/user/bloqs/lists/{$this->listId}/items/{$itemId}"
         );
 
         return new BloqItem($response['data'] ?? $response);
@@ -83,13 +89,18 @@ class ItemsResource
      */
     public function create(array $data): BloqItem
     {
-        $userId = $this->config->requireUserId();
         $response = $this->http->post(
-            "/api/v1/user/{$userId}/bloqs/lists/{$this->listId}/items",
+            "/api/v1/user/bloqs/lists/{$this->listId}/items",
             $data
         );
 
-        return new BloqItem($response);
+        // API may double-nest: {data: {data: {...}}}
+        $data = $response['data'] ?? $response;
+        if (is_array($data) && isset($data['data']) && is_array($data['data'])) {
+            $data = $data['data'];
+        }
+
+        return new BloqItem($data);
     }
 
     /**
@@ -101,13 +112,12 @@ class ItemsResource
      */
     public function update(int $itemId, array $data): BloqItem
     {
-        $userId = $this->config->requireUserId();
-        $response = $this->http->patch(
-            "/api/v1/user/{$userId}/bloqs/list/item/{$itemId}",
+        $response = $this->http->put(
+            "/api/v1/user/bloqs/list/item/{$itemId}",
             $data
         );
 
-        return new BloqItem($response);
+        return new BloqItem($response['data'] ?? $response);
     }
 
     /**
@@ -118,8 +128,7 @@ class ItemsResource
      */
     public function delete(int $itemId): bool
     {
-        $userId = $this->config->requireUserId();
-        $this->http->delete("/api/v1/user/{$userId}/bloqs/list/item/{$itemId}");
+        $this->http->delete("/api/v1/user/bloqs/list/item/{$itemId}");
 
         return true;
     }
@@ -226,7 +235,7 @@ class ItemsResource
     {
         $userId = $this->config->requireUserId();
         $response = $this->http->get(
-            "/api/v1/user/{$userId}/bloqs/list/{$itemId}/chat/messages"
+            "/api/v1/user/{$userId}/bloqs/list/item/{$itemId}/chat/messages"
         );
 
         return $response['messages'] ?? $response;
@@ -246,7 +255,7 @@ class ItemsResource
     {
         $userId = $this->config->requireUserId();
         return $this->http->post(
-            "/api/v1/user/{$userId}/bloqs/list/{$itemId}/chat/messages",
+            "/api/v1/user/{$userId}/bloqs/list/item/{$itemId}/chat/messages",
             $message
         );
     }
@@ -261,10 +270,11 @@ class ItemsResource
     {
         $userId = $this->config->requireUserId();
         $response = $this->http->post(
-            "/api/v1/user/{$userId}/bloqs/list/item/{$itemId}/make-public"
+            "/api/v1/user/{$userId}/bloqs/list/item/{$itemId}/make-public",
+            ['user_id' => $userId]
         );
 
-        return new BloqItem($response);
+        return new BloqItem($response['data'] ?? $response);
     }
 
     /**
@@ -277,9 +287,10 @@ class ItemsResource
     {
         $userId = $this->config->requireUserId();
         $response = $this->http->post(
-            "/api/v1/user/{$userId}/bloqs/list/item/{$itemId}/make-private"
+            "/api/v1/user/{$userId}/bloqs/list/item/{$itemId}/make-private",
+            ['user_id' => $userId]
         );
 
-        return new BloqItem($response);
+        return new BloqItem($response['data'] ?? $response);
     }
 }
