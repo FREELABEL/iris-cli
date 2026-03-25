@@ -352,16 +352,34 @@ HELP
         $statusText = $paidInvoices > 0 ? 'PAID' : ($pendingInvoices > 0 ? 'PENDING' : 'NO PAYMENTS');
         $statusColor = $paidInvoices > 0 ? 'green' : ($pendingInvoices > 0 ? 'yellow' : 'red');
 
-        $io->text([
+        $lines = [
             "<fg={$statusColor};options=bold>{$statusIcon} Status: {$statusText}</>",
             '',
-            '<fg=cyan>Invoices:</fg>      ' . ($summary['total_invoices'] ?? 0) . ' total, ' . 
+            '<fg=cyan>Invoices:</fg>      ' . ($summary['total_invoices'] ?? 0) . ' total, ' .
                 '<fg=green>' . $paidInvoices . ' paid</>, ' .
                 '<fg=yellow>' . $pendingInvoices . ' pending</>',
             '<fg=cyan>Payments:</fg>      ' . ($summary['successful_payments'] ?? 0) . ' successful',
             '<fg=cyan;options=bold>Total Paid:</fg>    <fg=green;options=bold>$' . number_format($totalPaid, 2) . '</>',
-            '',
-        ]);
+        ];
+
+        // Show subscription + next charge if available
+        $subscriptions = $payments['subscriptions'] ?? [];
+        if (!empty($subscriptions)) {
+            $sub = $subscriptions[0];
+            $lines[] = '';
+            $subStatus = strtoupper($sub['status'] ?? 'unknown');
+            $subIcon = $sub['status'] === 'active' ? '🔄' : '⚠️';
+            $lines[] = "<fg=cyan>Subscription:</fg>  {$subIcon} {$subStatus} — \${$sub['amount']}/{$sub['interval']}";
+            if (!empty($sub['current_period_end'])) {
+                $lines[] = '<fg=cyan>Next Charge:</fg>   <fg=yellow>' . $sub['current_period_end'] . '</>';
+            }
+            if ($sub['cancel_at_period_end'] ?? false) {
+                $lines[] = '<fg=red>⚠ Cancels at period end</>';
+            }
+        }
+        $lines[] = '';
+
+        $io->text($lines);
 
         if ($paidInvoices > 0) {
             $io->success('Payment received!');
