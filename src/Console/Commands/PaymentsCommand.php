@@ -96,6 +96,18 @@ HELP
 
             $payments = $iris->leads->stripePayments($leadId, $queryParams);
 
+            // Auto-fallback: if no customer found on connected account, try platform account
+            if (!($payments['has_stripe_customer'] ?? false) && empty($queryParams['no_connect'])) {
+                $fallbackParams = array_merge($queryParams, ['no_connect' => '1']);
+                $platformPayments = $iris->leads->stripePayments($leadId, $fallbackParams);
+                if ($platformPayments['has_stripe_customer'] ?? false) {
+                    $payments = $platformPayments;
+                    if (!$jsonOutput) {
+                        $io->note('Found payments on platform account (not connected account).');
+                    }
+                }
+            }
+
             if ($jsonOutput) {
                 $output->writeln(json_encode($payments, JSON_PRETTY_PRINT));
                 return Command::SUCCESS;
