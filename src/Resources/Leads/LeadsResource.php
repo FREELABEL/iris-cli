@@ -78,7 +78,7 @@ class LeadsResource
 
         return new LeadCollection(
             array_map(fn($data) => new Lead($data), $response['data'] ?? $response),
-            $response['meta'] ?? []
+            $this->extractMeta($response)
         );
     }
 
@@ -106,7 +106,7 @@ class LeadsResource
 
         return new LeadCollection(
             array_map(fn($data) => new Lead($data), $response['data'] ?? $response),
-            $response['meta'] ?? []
+            $this->extractMeta($response)
         );
     }
 
@@ -810,9 +810,13 @@ class LeadsResource
      * }
      * ```
      */
-    public function stripePayments(int $leadId): array
+    public function stripePayments(int $leadId, array $queryParams = []): array
     {
-        $response = $this->http->get("/api/v1/leads/{$leadId}/stripe-payments");
+        $url = "/api/v1/leads/{$leadId}/stripe-payments";
+        if (!empty($queryParams)) {
+            $url .= '?' . http_build_query($queryParams);
+        }
+        $response = $this->http->get($url);
         return $response['data'] ?? $response;
     }
 
@@ -1128,6 +1132,31 @@ class LeadsResource
      * }
      * ```
      */
+    /**
+     * Extract pagination meta from a response envelope.
+     *
+     * Laravel's LengthAwarePaginator returns: current_page, data, from, last_page,
+     * per_page, to, total. This method normalizes those into the meta array
+     * that LeadCollection expects.
+     */
+    private function extractMeta(array $response): array
+    {
+        // Check for Laravel paginator keys at the top level
+        if (isset($response['total']) || isset($response['current_page'])) {
+            return [
+                'current_page' => $response['current_page'] ?? 1,
+                'last_page' => $response['last_page'] ?? 1,
+                'per_page' => $response['per_page'] ?? 10,
+                'total' => $response['total'] ?? 0,
+                'from' => $response['from'] ?? null,
+                'to' => $response['to'] ?? null,
+            ];
+        }
+
+        // Fall back to nested meta key
+        return $response['meta'] ?? [];
+    }
+
     public function bulkCreateFromDescriptions(array $descriptions, int $bloqId, array $options = []): array
     {
         $results = [
