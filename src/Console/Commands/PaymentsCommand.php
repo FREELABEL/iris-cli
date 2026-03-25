@@ -21,7 +21,7 @@ use IRIS\SDK\Auth\CredentialStore;
  *   iris payments <lead_id> --json       # JSON output
  *   iris payments <lead_id> --summary    # Summary only
  */
-class PaymentsCommand extends Command
+class PaymentsCommand extends BaseCommand
 {
     protected function configure(): void
     {
@@ -61,7 +61,9 @@ HELP
             )
             ->addArgument('lead_id', InputArgument::REQUIRED, 'Lead ID to check payments for')
             ->addOption('json', null, InputOption::VALUE_NONE, 'Output as JSON')
-            ->addOption('summary', 's', InputOption::VALUE_NONE, 'Show summary only');
+            ->addOption('summary', 's', InputOption::VALUE_NONE, 'Show summary only')
+            ->addOption('email', null, InputOption::VALUE_REQUIRED, 'Override email for Stripe lookup (if lead email differs from Stripe)')
+            ->addOption('no-connect', null, InputOption::VALUE_NONE, 'Search platform Stripe account instead of connected account');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -82,7 +84,17 @@ HELP
             $config = $store->toConfigArray();
             $iris = new IRIS($config);
 
-            $payments = $iris->leads->stripePayments($leadId);
+            // Build query params for overrides
+            $queryParams = [];
+            $emailOverride = $input->getOption('email');
+            if ($emailOverride) {
+                $queryParams['email'] = $emailOverride;
+            }
+            if ($input->getOption('no-connect')) {
+                $queryParams['no_connect'] = '1';
+            }
+
+            $payments = $iris->leads->stripePayments($leadId, $queryParams);
 
             if ($jsonOutput) {
                 $output->writeln(json_encode($payments, JSON_PRETTY_PRINT));
@@ -237,25 +249,60 @@ HELP
         }
 
         // Summary
-        $summary = $payments['summary'];
+        $summary = $payments['summary'] ?? [];
         $io->section('📊 Financial Summary');
-        $io->table(
-            ['Metric', 'Value'],
-            [
-                ['Total Invoices', $summary['total_invoices'] ?? 0],
-                ['Paid Invoices', '<fg=green>' . ($summary['paid_invoices'] ?? 0) . '</>'],
-                ['Pending Invoices', '<fg=yellow>' . ($summary['pending_invoices'] ?? 0) . '</>'],
-                ['Total Payments', $summary['total_payments'] ?? 0],
-                ['Successful Payments', '<fg=green>' . ($summary['successful_payments'] ?? 0) . '</>'],
-                ['Pending Sessions', $summary['pending_sessions'] ?? 0],
-                ['<options=bold>Total Revenue</>', '<fg=green;options=bold>$' . number_format($payments['total_paid'] ?? 0, 2) . '</>'],
-            ]
-        );
+
+        $summaryRows = [
+            ['Total Invoices', $summary['total_invoices'] ?? 0],
+            ['Paid Invoices', '<fg=green>' . ($summary['paid_invoices'] ?? 0) . '</>'],
+            ['Pending Invoices', '<fg=yellow>' . ($summary['pending_invoices'] ?? 0) . '</>'],
+            ['Total Payments', $summary['total_payments'] ?? 0],
+            ['Successful Payments', '<fg=green>' . ($summary['successful_payments'] ?? 0) . '</>'],
+            ['Pending Sessions', $summary['pending_sessions'] ?? 0],
+        ];
+
+        // Show subscription info if available
+        if (isset($summary['active_subscriptions']) && $summary['active_subscriptions'] > 0) {
+            $summaryRows[] = ['Active Subscriptions', '<fg=green>' . $summary['active_subscriptions'] . '</>'];
+        }
+        if (isset($summary['past_due_subscriptions']) && $summary['past_due_subscriptions'] > 0) {
+            $summaryRows[] = ['Past Due Subscriptions', '<fg=red>' . $summary['past_due_subscriptions'] . '</>'];
+        }
+
+        $summaryRows[] = ['<options=bold>Total Revenue</>', '<fg=green;options=bold>$' . number_format($payments['total_paid'] ?? 0, 2) . '</>'];
+
+        $io->table(['Metric', 'Value'], $summaryRows);
+
+        // Subscriptions detail
+        if (!empty($payments['subscriptions'])) {
+            $io->section('🔄 Subscriptions (' . count($payments['subscriptions']) . ')');
+            $subRows = [];
+            foreach ($payments['subscriptions'] as $sub) {
+                $statusIcon = match($sub['status']) {
+                    'active' => '✅',
+                    'past_due' => '⚠️',
+                    'canceled', 'unpaid' => '❌',
+                    'trialing' => '🔄',
+                    default => '•'
+                };
+                $subRows[] = [
+                    $sub['plan_name'] ?? 'Unknown',
+                    $statusIcon . ' ' . strtoupper($sub['status']),
+                    '$' . number_format($sub['amount'] ?? 0, 2) . '/' . ($sub['interval'] ?? 'N/A'),
+                    $sub['current_period_start'] ?? 'N/A',
+                    $sub['current_period_end'] ?? 'N/A',
+                ];
+            }
+            $io->table(['Plan', 'Status', 'Amount', 'Period Start', 'Period End'], $subRows);
+        }
 
         if (($summary['paid_invoices'] ?? 0) > 0) {
             $io->success('💰 Payment confirmed! Total: $' . number_format($payments['total_paid'] ?? 0, 2));
         } elseif (($summary['pending_invoices'] ?? 0) > 0) {
             $io->warning('⏳ Payment pending. Follow up with customer.');
+        } elseif (!($payments['has_stripe_customer'] ?? false)) {
+            $io->note('No Stripe customer found. Lead may be paying outside Stripe or using a different email.');
+            $io->text('<fg=gray>Tip: Check Stripe dashboard directly or update lead email to match Stripe customer.</>');
         } else {
             $io->note('No invoices found for this lead.');
         }

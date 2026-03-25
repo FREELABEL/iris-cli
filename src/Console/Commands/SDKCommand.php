@@ -138,6 +138,12 @@ EOT
                 $params['user_id'] = (int)$userId;
             }
 
+            // Resolve tag names → IDs for leads.create / leads.update
+            if (isset($params['tags']) && is_string($params['tags'])) {
+                $tagNames = array_map('trim', explode(',', $params['tags']));
+                $params['tags'] = $this->resolveTagNames($iris, $tagNames);
+            }
+
             // Execute dynamic call
             $result = $this->executeDynamicCall($iris, $parts, $params);
 
@@ -487,8 +493,8 @@ EOT
         foreach ($params as $param) {
             if (strpos($param, '=') !== false) {
                 [$key, $value] = explode('=', $param, 2);
-                // Auto-detect type
-                $parsed[$key] = $this->castValue($value);
+                // Auto-detect type (pass key name for context-aware casting)
+                $parsed[$key] = $this->castValue($value, $key);
             } else {
                 $parsed[] = $this->castValue($param);
             }
@@ -750,13 +756,68 @@ EOT
         return null;
     }
     
-    private function castValue(string $value)
+    /**
+     * Resolve tag names to IDs, creating new tags if they don't exist.
+     *
+     * Accepts an array of tag names (strings) and returns an array of tag IDs (ints).
+     * If a tag name doesn't exist yet, it's created automatically.
+     *
+     * @param IRIS $iris SDK instance
+     * @param array $tagNames Array of tag name strings
+     * @return array Array of tag IDs
+     */
+    private function resolveTagNames(IRIS $iris, array $tagNames): array
+    {
+        // Fetch existing tags
+        $existingTags = $iris->leads->tags();
+        $tagMap = [];
+        foreach ($existingTags as $tag) {
+            $tagMap[strtolower($tag->name)] = $tag->id;
+        }
+
+        $tagIds = [];
+        foreach ($tagNames as $name) {
+            $name = trim($name);
+            if ($name === '') continue;
+
+            // If it's already a numeric ID, use it directly
+            if (is_numeric($name)) {
+                $tagIds[] = (int) $name;
+                continue;
+            }
+
+            $key = strtolower($name);
+            if (isset($tagMap[$key])) {
+                $tagIds[] = $tagMap[$key];
+            } else {
+                // Create new tag
+                $newTag = $iris->leads->createTag(['name' => $name, 'color' => '#3B82F6']);
+                $tagIds[] = $newTag->id;
+                $tagMap[$key] = $newTag->id;
+            }
+        }
+
+        return $tagIds;
+    }
+
+    private function castValue(string $value, ?string $key = null)
     {
         if ($value === 'true') return true;
         if ($value === 'false') return false;
         if ($value === 'null') return null;
-        if (is_numeric($value)) return $value + 0; // Cast to int or float
-        if ($value[0] === '{' || $value[0] === '[') {
+
+        // Fields that must always remain strings even if they look numeric
+        // (e.g., phone=+17025422112 should NOT become integer 17025422112)
+        $stringFields = ['phone', 'name', 'nickname', 'email', 'company', 'title',
+                         'source', 'status', 'notes', 'message', 'content', 'description',
+                         'address', 'city', 'state', 'zip', 'country', 'url', 'website'];
+
+        $forceString = $key !== null && in_array(strtolower($key), $stringFields, true);
+
+        if (!$forceString && is_numeric($value) && !preg_match('/^\+/', $value)) {
+            return $value + 0; // Cast to int or float (but never phone-style "+1..." values)
+        }
+        if (strlen($value) > 0 && ($value[0] === '{' || $value[0] === '[')) {
             $decoded = json_decode($value, true);
             if (json_last_error() === JSON_ERROR_NONE) return $decoded;
         }
