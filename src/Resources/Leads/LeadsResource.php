@@ -813,10 +813,7 @@ class LeadsResource
     public function stripePayments(int $leadId, array $queryParams = []): array
     {
         $url = "/api/v1/leads/{$leadId}/stripe-payments";
-        if (!empty($queryParams)) {
-            $url .= '?' . http_build_query($queryParams);
-        }
-        $response = $this->http->get($url);
+        $response = $this->http->get($url, $queryParams);
         return $response['data'] ?? $response;
     }
 
