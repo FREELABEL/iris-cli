@@ -159,6 +159,7 @@ class Client
             || str_contains($endpoint, '/pages')
             || str_contains($endpoint, '/videos')
             || str_contains($endpoint, '/collections')
+            || str_contains($endpoint, '/platform')
             || str_contains($endpoint, '/a2p/')
             || str_contains($endpoint, '/outreach-campaigns')
             || str_contains($endpoint, '/calls')
@@ -239,10 +240,6 @@ class Client
 
         return $this->request('POST', $endpoint, [
             'multipart' => $multipart,
-            'headers' => [
-                // Remove Content-Type header to let Guzzle set it with boundary
-                'Content-Type' => null,
-            ],
         ]);
     }
 
@@ -264,6 +261,11 @@ class Client
 
         // Merge auth headers with any custom headers in options
         $options['headers'] = array_merge($authHeaders, $options['headers'] ?? []);
+
+        // For multipart uploads, remove Content-Type so Guzzle sets the boundary automatically
+        if (isset($options['multipart'])) {
+            unset($options['headers']['Content-Type']);
+        }
 
         try {
             $response = $this->client->request($method, $url, $options);
