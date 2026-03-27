@@ -39,6 +39,7 @@ use IRIS\SDK\Resources\Memory\MemoryResource;
 use IRIS\SDK\Resources\Diary\DiaryResource;
 use IRIS\SDK\Resources\Calls\CallsResource;
 use IRIS\SDK\Resources\Monitor\MonitorResource;
+use IRIS\SDK\Resources\Packages\PackagesResource;
 use IRIS\SDK\Events\WebhookHandler;
 
 /**
@@ -267,6 +268,11 @@ class IRIS
     public MonitorResource $monitor;
 
     /**
+     * Packages resource for managing platform pricing packages.
+     */
+    public PackagesResource $packages;
+
+    /**
      * Create a new IRIS client instance.
      *
      * @param array{
@@ -324,6 +330,7 @@ class IRIS
         $this->diary = new DiaryResource($this->http, $this->config);
         $this->calls = new CallsResource($this->http, $this->config);
         $this->monitor = new MonitorResource($this->http, $this->config);
+        $this->packages = new PackagesResource($this->http, $this->config);
     }
 
     /**

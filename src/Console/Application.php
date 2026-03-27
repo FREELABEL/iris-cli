@@ -51,6 +51,8 @@ use IRIS\SDK\Console\Commands\OutreachSendCommand;
 use IRIS\SDK\Console\Commands\CallCommand;
 use IRIS\SDK\Console\Commands\BloqMembersCommand;
 use IRIS\SDK\Console\Commands\MonitorCommand;
+use IRIS\SDK\Console\Commands\InvoicesCommand;
+use IRIS\SDK\Console\Commands\PackagesCommand;
 
 class Application extends BaseApplication
 {
@@ -78,6 +80,7 @@ class Application extends BaseApplication
             new ScheduleCommand(),
             new SopCommand(),
             new PaymentsCommand(),
+            new InvoicesCommand(),
             new AppCommand(),
             new BloqIngestCommand(),
             new BloqIngestionStatusCommand(),
@@ -107,6 +110,7 @@ class Application extends BaseApplication
             new OutreachSendCommand(),
             new CallCommand(),
             new MonitorCommand(),
+            new PackagesCommand(),
         ]);
     }
 }
