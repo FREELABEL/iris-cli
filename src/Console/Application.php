@@ -35,6 +35,7 @@ use IRIS\SDK\Console\Commands\TokenCommand;
 use IRIS\SDK\Console\Commands\UsersCommand;
 use IRIS\SDK\Console\Commands\RemindRCommand;
 use IRIS\SDK\Console\Commands\PagesCommand;
+use IRIS\SDK\Console\Commands\PartialsCommand;
 use IRIS\SDK\Console\Commands\ConsolidateLeadsCommand;
 use IRIS\SDK\Console\Commands\DemoShowcaseCommand;
 use IRIS\SDK\Console\Commands\ProfileCommand;
@@ -53,6 +54,10 @@ use IRIS\SDK\Console\Commands\BloqMembersCommand;
 use IRIS\SDK\Console\Commands\MonitorCommand;
 use IRIS\SDK\Console\Commands\InvoicesCommand;
 use IRIS\SDK\Console\Commands\PackagesCommand;
+use IRIS\SDK\Console\Commands\LeadGraphCommand;
+use IRIS\SDK\Console\Commands\LeadAssociationsCommand;
+use IRIS\SDK\Console\Commands\OpportunitiesCommand;
+use IRIS\SDK\Console\Commands\AtlasOsCommand;
 
 class Application extends BaseApplication
 {
@@ -95,6 +100,7 @@ class Application extends BaseApplication
             new UsersCommand(),
             new RemindRCommand(),
             new PagesCommand(),
+            new PartialsCommand(),
             new ConsolidateLeadsCommand(),
             new DemoShowcaseCommand(),
             new ProfileCommand(),
@@ -111,6 +117,10 @@ class Application extends BaseApplication
             new CallCommand(),
             new MonitorCommand(),
             new PackagesCommand(),
+            new LeadGraphCommand(),
+            new LeadAssociationsCommand(),
+            new OpportunitiesCommand(),
+            new AtlasOsCommand(),
         ]);
     }
 }
