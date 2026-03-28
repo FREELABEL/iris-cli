@@ -140,6 +140,11 @@ class Client
      */
     protected function buildUrl(string $endpoint): string
     {
+        // Integration execute-direct lives on iris-api (must check BEFORE /users/ catch-all)
+        if (str_contains($endpoint, '/execute-direct')) {
+            return $this->config->irisUrl . '/' . ltrim($endpoint, '/');
+        }
+
         // Use FL-API URL for leads, deliverables, profiles, services, agents management, cloud-files, articles, bloqs, programs, courses, pages, user registration
         // Check /users/ FIRST because /users/{id}/bloqs/agents needs to go to FL-API
         if (str_contains($endpoint, '/users/')
@@ -157,6 +162,7 @@ class Client
             || str_contains($endpoint, '/user-programs')
             || str_contains($endpoint, '/courses')
             || str_contains($endpoint, '/pages')
+            || str_contains($endpoint, '/partials')
             || str_contains($endpoint, '/videos')
             || str_contains($endpoint, '/collections')
             || str_contains($endpoint, '/platform')

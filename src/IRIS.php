@@ -33,6 +33,7 @@ use IRIS\SDK\Resources\Phone\PhoneResource;
 use IRIS\SDK\Resources\Automations\AutomationsResource;
 use IRIS\SDK\Resources\Users\UsersResource;
 use IRIS\SDK\Resources\Pages\PagesResource;
+use IRIS\SDK\Resources\Partials\PartialsResource;
 use IRIS\SDK\Resources\Payments\PaymentsResource;
 use IRIS\SDK\Resources\Marketplace\MarketplaceResource;
 use IRIS\SDK\Resources\Memory\MemoryResource;
@@ -40,6 +41,8 @@ use IRIS\SDK\Resources\Diary\DiaryResource;
 use IRIS\SDK\Resources\Calls\CallsResource;
 use IRIS\SDK\Resources\Monitor\MonitorResource;
 use IRIS\SDK\Resources\Packages\PackagesResource;
+use IRIS\SDK\Resources\Opportunities\OpportunitiesResource;
+use IRIS\SDK\Resources\AtlasOs\AtlasOsResource;
 use IRIS\SDK\Events\WebhookHandler;
 
 /**
@@ -238,6 +241,11 @@ class IRIS
     public PagesResource $pages;
 
     /**
+     * Partials resource for managing reusable page component configs.
+     */
+    public PartialsResource $partials;
+
+    /**
      * Payments resource for agent wallets and A2P protocol operations.
      */
     public PaymentsResource $payments;
@@ -271,6 +279,16 @@ class IRIS
      * Packages resource for managing platform pricing packages.
      */
     public PackagesResource $packages;
+
+    /**
+     * Opportunities resource for managing marketplace opportunities (job postings, gigs).
+     */
+    public OpportunitiesResource $opportunities;
+
+    /**
+     * Atlas OS resource for business operations (inventory, budget, staff, events, calendar, research, docs).
+     */
+    public AtlasOsResource $atlasOs;
 
     /**
      * Create a new IRIS client instance.
@@ -324,6 +342,7 @@ class IRIS
         $this->automations = new AutomationsResource($this->http, $this->config);
         $this->users = new UsersResource($this->http, $this->config);
         $this->pages = new PagesResource($this->http, $this->config);
+        $this->partials = new PartialsResource($this->http, $this->config);
         $this->payments = new PaymentsResource($this->http, $this->config);
         $this->marketplace = new MarketplaceResource($this->http, $this->config);
         $this->memory = new MemoryResource($this->http, $this->config);
@@ -331,6 +350,8 @@ class IRIS
         $this->calls = new CallsResource($this->http, $this->config);
         $this->monitor = new MonitorResource($this->http, $this->config);
         $this->packages = new PackagesResource($this->http, $this->config);
+        $this->opportunities = new OpportunitiesResource($this->http, $this->config);
+        $this->atlasOs = new AtlasOsResource($this->http, $this->config);
     }
 
     /**

@@ -139,7 +139,15 @@ class PagesResource
             $data['json_content'] = $jsonContent;
         }
 
-        return $this->http->post('/api/v1/pages', $data);
+        $result = $this->http->post('/api/v1/pages', $data);
+
+        // Enrich response with public URL
+        $slug = $result['data']['slug'] ?? $data['slug'] ?? '';
+        if ($slug) {
+            $result['data']['public_url'] = $this->getPublicUrl($slug);
+        }
+
+        return $result;
     }
 
     /**
@@ -340,8 +348,13 @@ class PagesResource
             ],
         ];
 
+        // Event template is built dynamically based on provided data
+        if ($template === 'event') {
+            return $this->createEventPage($data);
+        }
+
         if (!isset($templates[$template])) {
-            throw new \InvalidArgumentException("Template '{$template}' not found. Available: " . implode(', ', array_keys($templates)));
+            throw new \InvalidArgumentException("Template '{$template}' not found. Available: " . implode(', ', array_keys($templates)) . ', event');
         }
 
         $templateData = $templates[$template];
@@ -349,6 +362,249 @@ class PagesResource
         $data['components'] = $templateData['components'];
 
         return $this->create($data);
+    }
+
+    /**
+     * Create an event page with conditional components.
+     *
+     * Mirrors PageTemplateService::buildEventTemplate() on iris-api.
+     * Components are conditionally included based on provided data.
+     *
+     * @param array $data Event data: title, date, description, venue, schedule[], speakers[], tickets[], etc.
+     * @return array Created page
+     */
+    protected function createEventPage(array $data): array
+    {
+        $themeMode = $data['theme_mode'] ?? 'dark';
+        $eventName = $data['title'] ?? 'Event';
+        $eventDate = $data['date'] ?? $data['subtitle'] ?? 'Coming Soon';
+
+        $components = [];
+
+        // SiteNavigation — always
+        $components[] = [
+            'type' => 'SiteNavigation',
+            'id' => 'nav-1',
+            'props' => [
+                'title' => $eventName,
+                'themeMode' => $themeMode,
+            ],
+        ];
+
+        // Hero — always
+        $components[] = [
+            'type' => 'Hero',
+            'id' => 'hero-main',
+            'props' => [
+                'title' => $eventName,
+                'subtitle' => $eventDate,
+                'backgroundGradient' => 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                'titleColor' => '#ffffff',
+                'subtitleColor' => 'rgba(255, 255, 255, 0.9)',
+                'textAlign' => 'center',
+                'minHeight' => '500px',
+                'themeMode' => $themeMode,
+            ],
+        ];
+
+        // Description TextBlock — if provided
+        if (!empty($data['description'])) {
+            $components[] = [
+                'type' => 'TextBlock',
+                'id' => 'details-1',
+                'props' => [
+                    'content' => $data['description'],
+                    'markdown' => true,
+                    'maxWidth' => '3xl',
+                    'themeMode' => $themeMode,
+                ],
+            ];
+        }
+
+        // Schedule DataTable — if provided
+        if (!empty($data['schedule']) && is_array($data['schedule'])) {
+            $components[] = [
+                'type' => 'DataTable',
+                'id' => 'schedule-1',
+                'props' => [
+                    'title' => 'Schedule',
+                    'themeMode' => $themeMode,
+                    'columns' => [
+                        ['key' => 'time', 'label' => 'Time', 'type' => 'text'],
+                        ['key' => 'session', 'label' => 'Session', 'type' => 'text'],
+                        ['key' => 'speaker', 'label' => 'Speaker', 'type' => 'text'],
+                        ['key' => 'location', 'label' => 'Location', 'type' => 'text'],
+                    ],
+                    'data' => array_map(fn($item) => [
+                        'time' => $item['time'] ?? '',
+                        'session' => $item['session'] ?? $item['title'] ?? '',
+                        'speaker' => $item['speaker'] ?? '',
+                        'location' => $item['location'] ?? '',
+                    ], $data['schedule']),
+                ],
+            ];
+        }
+
+        // Speakers PortfolioGrid — if provided
+        if (!empty($data['speakers']) && is_array($data['speakers'])) {
+            $components[] = [
+                'type' => 'PortfolioGrid',
+                'id' => 'speakers-1',
+                'props' => [
+                    'title' => 'Speakers',
+                    'themeMode' => $themeMode,
+                    'columns' => min(count($data['speakers']), 3),
+                    'items' => array_map(fn($s) => [
+                        'title' => $s['name'] ?? $s['title'] ?? 'Speaker',
+                        'description' => $s['role'] ?? $s['description'] ?? $s['bio'] ?? '',
+                        'imageUrl' => $s['image_url'] ?? $s['imageUrl'] ?? $s['photo'] ?? '',
+                    ], $data['speakers']),
+                ],
+            ];
+        }
+
+        // Tickets PricingPlans — if provided
+        if (!empty($data['tickets']) && is_array($data['tickets'])) {
+            $components[] = [
+                'type' => 'PricingPlans',
+                'id' => 'tickets-1',
+                'props' => [
+                    'title' => 'Tickets',
+                    'subtitle' => 'Choose your experience',
+                    'themeMode' => $themeMode,
+                    'packages' => array_map(fn($t) => [
+                        'id' => 'ticket-' . bin2hex(random_bytes(4)),
+                        'name' => $t['name'] ?? 'General Admission',
+                        'description' => $t['description'] ?? '',
+                        'price' => $t['price'] ?? 0,
+                        'billingType' => 'one_time',
+                        'features' => $t['features'] ?? [],
+                        'highlighted' => $t['highlighted'] ?? false,
+                    ], $data['tickets']),
+                ],
+            ];
+        }
+
+        // Venue TextBlock — if provided
+        if (!empty($data['venue'])) {
+            $venueText = $data['venue'];
+            if (!empty($data['venue_map_url'])) {
+                $venueText .= "\n\n[View on Map]({$data['venue_map_url']})";
+            }
+            $components[] = [
+                'type' => 'TextBlock',
+                'id' => 'venue-1',
+                'props' => [
+                    'title' => 'Venue',
+                    'content' => $venueText,
+                    'markdown' => true,
+                    'maxWidth' => '3xl',
+                    'themeMode' => $themeMode,
+                ],
+            ];
+        }
+
+        // EnrollmentForm — unless explicitly disabled
+        $includeRegistration = $data['include_registration'] ?? true;
+        if ($includeRegistration) {
+            $fields = [
+                ['name' => 'name', 'label' => 'Full Name', 'type' => 'text', 'required' => true],
+                ['name' => 'email', 'label' => 'Email', 'type' => 'email', 'required' => true],
+            ];
+            if (!empty($data['tickets'])) {
+                $fields[] = [
+                    'name' => 'ticket_type',
+                    'label' => 'Ticket Type',
+                    'type' => 'select',
+                    'required' => true,
+                    'options' => array_map(fn($t) => $t['name'] ?? 'General', $data['tickets']),
+                ];
+            }
+            $components[] = [
+                'type' => 'EnrollmentForm',
+                'id' => 'rsvp-1',
+                'props' => [
+                    'title' => 'Register',
+                    'subtitle' => 'Secure your spot',
+                    'themeMode' => $themeMode,
+                    'fields' => $fields,
+                    'submitLabel' => 'Register Now',
+                    'successMessage' => 'You\'re registered! See you there.',
+                ],
+            ];
+        }
+
+        // SiteFooter — always
+        $components[] = [
+            'type' => 'SiteFooter',
+            'id' => 'footer-1',
+            'props' => [
+                'themeMode' => $themeMode,
+            ],
+        ];
+
+        // Build page data
+        $pageData = [
+            'slug' => $data['slug'] ?? '',
+            'title' => $eventName,
+            'seo_title' => $data['seo_title'] ?? $eventName,
+            'seo_description' => $data['seo_description'] ?? "Join us for {$eventName} on {$eventDate}",
+            'auto_publish' => true,
+            'theme' => [
+                'mode' => $themeMode,
+                'backgroundColor' => $themeMode === 'dark' ? '#0a0a0a' : '#ffffff',
+                'primaryColor' => '#f5576c',
+                'secondaryColor' => '#f093fb',
+            ],
+            'components' => $components,
+        ];
+
+        // Store event metadata in json_content for cross-compatibility with Genesis
+        $jsonContent = [
+            'version' => '1.0',
+            'type' => 'event',
+            'theme' => $pageData['theme'],
+            'components' => $components,
+            'meta' => [
+                'created_by' => 'cli',
+                'template' => 'event',
+                'event_type' => $data['event_type'] ?? 'conference',
+                'event_date' => $eventDate,
+                'created_at' => date('c'),
+            ],
+        ];
+
+        unset($pageData['theme'], $pageData['components']);
+
+        if (!isset($pageData['owner_type'])) {
+            $pageData['owner_type'] = 'user';
+        }
+        if (!isset($pageData['owner_id']) && $this->config->userId) {
+            $pageData['owner_id'] = $this->config->userId;
+        }
+
+        $pageData['json_content'] = $jsonContent;
+
+        $result = $this->http->post('/api/v1/pages', $pageData);
+
+        // Enrich response with public URL
+        $slug = $result['data']['slug'] ?? $data['slug'] ?? '';
+        if ($slug) {
+            $result['data']['public_url'] = $this->getPublicUrl($slug);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get the public URL for a page by slug.
+     */
+    public function getPublicUrl(string $slug): string
+    {
+        $env = getenv('IRIS_ENV') ?: 'production';
+        return $env === 'local'
+            ? "http://local.iris.freelabel.net:9300/p/{$slug}"
+            : "https://heyiris.io/p/{$slug}";
     }
 
     /**
@@ -576,6 +832,160 @@ class PagesResource
         return null;
     }
 
+    // ========================================================================
+    // Genesis Integration Functions (via execute-direct)
+    // ========================================================================
+
+    /**
+     * Execute a Genesis integration function via the execute-direct endpoint.
+     */
+    private function executeGenesis(string $function, array $params = []): array
+    {
+        $userId = $this->config->userId;
+        return $this->http->post(
+            "/api/v1/users/{$userId}/integrations/execute-direct?user_id={$userId}",
+            ['integration' => 'genesis', 'action' => $function, 'params' => $params]
+        );
+    }
+
+    /**
+     * AI-edit a page using natural language instructions.
+     *
+     * @param int $pageId Page ID to edit
+     * @param string $instructions Natural language editing instructions
+     * @return array Changes applied
+     */
+    public function aiEdit(int $pageId, string $instructions): array
+    {
+        return $this->executeGenesis('ai_edit_page', [
+            'page_id' => $pageId,
+            'instructions' => $instructions,
+        ]);
+    }
+
+    /**
+     * Get analytics for a single page.
+     *
+     * @param int $pageId Page ID
+     * @return array Analytics data (views, engagement, etc.)
+     */
+    public function analytics(int $pageId): array
+    {
+        return $this->executeGenesis('get_page_analytics', [
+            'page_id' => $pageId,
+        ]);
+    }
+
+    /**
+     * Get analytics for multiple pages at once.
+     *
+     * @param array $pageIds Array of page IDs
+     * @return array Batch analytics data
+     */
+    public function analyticsBatch(array $pageIds): array
+    {
+        return $this->executeGenesis('get_page_analytics', [
+            'page_ids' => implode(',', $pageIds),
+        ]);
+    }
+
+    /**
+     * List or export form submissions for a page.
+     *
+     * @param int $pageId Page ID
+     * @param string $action 'list' or 'export'
+     * @param string $format Export format: 'json' or 'csv'
+     * @return array Submissions data
+     */
+    public function submissions(int $pageId, string $action = 'list', string $format = 'json'): array
+    {
+        return $this->executeGenesis('manage_submissions', [
+            'page_id' => $pageId,
+            'action' => $action,
+            'format' => $format,
+        ]);
+    }
+
+    /**
+     * Create a Stripe checkout link for a page's pricing package.
+     *
+     * @param int $pageId Page ID with PricingPlans component
+     * @param string $packageId Package ID from the PricingPlans component
+     * @param string $buyerEmail Buyer's email address
+     * @return array Contains checkout_url
+     */
+    public function createCheckoutLink(int $pageId, string $packageId, string $buyerEmail): array
+    {
+        return $this->executeGenesis('create_checkout_link', [
+            'page_id' => $pageId,
+            'package_id' => $packageId,
+            'buyer_email' => $buyerEmail,
+        ]);
+    }
+
+    /**
+     * Add pricing packages to a page (monetization setup).
+     *
+     * @param int $pageId Page ID to monetize
+     * @param array $packages Array of packages: [{name, price, billingType, features}, ...]
+     * @param array $options Optional: section_title, section_subtitle
+     * @return array Result with page_url, packages_added count
+     */
+    public function setupMonetization(int $pageId, array $packages, array $options = []): array
+    {
+        return $this->executeGenesis('setup_page_monetization', array_merge([
+            'page_id' => $pageId,
+            'packages' => $packages,
+        ], $options));
+    }
+
+    /**
+     * AI-compose a full page from a video URL, website URL, topic, or raw content.
+     *
+     * @param string $sourceType Source type: 'video', 'url', 'topic', 'content'
+     * @param string $source The URL or text content
+     * @param array $options Optional: title, style (landing/article/product/portfolio), theme_mode, include_form
+     * @return array Created page data with page_url, page_id
+     */
+    public function composePage(string $sourceType, string $source, array $options = []): array
+    {
+        return $this->executeGenesis('compose_page', array_merge([
+            'source_type' => $sourceType,
+            'source' => $source,
+        ], $options));
+    }
+
+    /**
+     * Generate or regenerate a preview thumbnail for a page.
+     *
+     * @param int $pageId Page ID
+     * @return array Contains thumbnail_url
+     */
+    public function generateThumbnail(int $pageId): array
+    {
+        return $this->executeGenesis('generate_thumbnail', [
+            'page_id' => $pageId,
+        ]);
+    }
+
+    /**
+     * Manage custom domain mappings for pages.
+     *
+     * @param string $action Action: 'list', 'map', 'verify', 'remove'
+     * @param array $params Additional params: domain, page_id, site_id, mapping_id
+     * @return array Domain mapping data
+     */
+    public function domains(string $action = 'list', array $params = []): array
+    {
+        return $this->executeGenesis('manage_domains', array_merge([
+            'action' => $action,
+        ], $params));
+    }
+
+    // ========================================================================
+    // Private Helpers
+    // ========================================================================
+
     /**
      * Merge updates into a nested array using dot notation.
      *
@@ -615,6 +1025,8 @@ class PagesResource
      */
     private function setNestedValue(array &$array, string $path, $value): void
     {
+        // Normalize bracket notation: components[0] → components.0
+        $path = preg_replace('/\[(\d+)\]/', '.$1', $path);
         $keys = explode('.', $path);
         $current = &$array;
         

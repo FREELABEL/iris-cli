@@ -72,17 +72,41 @@ Component Management:
   pages update-component <slug> --component-id=xxx   Update a component
   pages remove-component <slug> --component-id=xxx   Remove a component
 
+Audit:
+  pages audit <slug>                                 Run validation + brand checks, compute score
+  pages audit <slug> --visual                        Also run Playwright visual tests (screenshots, contrast, images)
+  pages audit <slug> --from-lead=413                 Attach audit report as deliverable to lead
+  pages audit <slug> --visual --from-lead=413        Full pipeline: validate + visual + attach
+
 Brand Profile:
   pages brand <slug>                                 Show current brand settings
   pages brand <slug> --from-lead=413                 Extract brand from lead notes (dry-run)
   pages brand <slug> --from-lead=413 --apply         Apply brand to page + fix component themes
+
+AI & Advanced:
+  pages ai-edit <slug> --instructions="..."          AI-edit page with natural language
+  pages compose --source-type=topic --source="..."   AI-compose a full page
+  pages thumbnail <slug>                             Generate preview thumbnail
+  pages analytics <slug>                             View page analytics
+  pages submissions <slug>                           List form submissions
+  pages submissions <slug> --format=csv              Export submissions as CSV
+
+Commerce:
+  pages checkout <slug> --package-id=X --buyer-email=Y  Generate Stripe checkout link
+  pages monetize <slug> --package-name="Pro" --price=29 Add pricing to page
+
+Domains:
+  pages domains                                      List custom domain mappings
+  pages domains map --domain=x.com --page-id=123     Map domain to page
+  pages domains verify --mapping-id=5                Verify DNS propagation
+  pages domains remove --mapping-id=5                Remove domain mapping
 
 Environment:
   pages list --env=production                        Target production API
   pages list --env=local                             Target local API
 HELP
             )
-            ->addArgument('action', InputArgument::OPTIONAL, 'Action: list, create, view, validate, brand, set, get, pull, push, diff, publish, unpublish, delete, duplicate, versions, rollback, components, add-component, update-component, remove-component')
+            ->addArgument('action', InputArgument::OPTIONAL, 'Action: list, create, view, validate, audit, brand, set, get, pull, push, diff, publish, unpublish, delete, duplicate, versions, rollback, components, add-component, update-component, remove-component, ai-edit, analytics, submissions, checkout, monetize, compose, thumbnail, domains')
             ->addArgument('slug', InputArgument::OPTIONAL, 'Page slug')
             ->addArgument('path', InputArgument::OPTIONAL, 'Dot-notation path (for set/get)')
             ->addArgument('value', InputArgument::OPTIONAL, 'Value to set (for set)')
@@ -114,8 +138,42 @@ HELP
             ->addOption('position', null, InputOption::VALUE_REQUIRED, 'Position to insert component (0-based index)')
             ->addOption('props', null, InputOption::VALUE_REQUIRED, 'Component props as JSON string')
             // Brand options
-            ->addOption('from-lead', null, InputOption::VALUE_REQUIRED, 'Lead ID to pull brand specs from (for brand action)')
-            ->addOption('apply', null, InputOption::VALUE_NONE, 'Apply brand changes (for brand action, without this flag it is dry-run)');
+            ->addOption('from-lead', null, InputOption::VALUE_REQUIRED, 'Lead ID to pull brand specs from (for brand/audit action)')
+            ->addOption('apply', null, InputOption::VALUE_NONE, 'Apply brand changes (for brand action, without this flag it is dry-run)')
+            ->addOption('visual', null, InputOption::VALUE_NONE, 'Run Playwright visual tests (for audit action)')
+            // Event options
+            ->addOption('event-date', null, InputOption::VALUE_REQUIRED, 'Event date (e.g., "March 28, 2026")')
+            ->addOption('event-type', null, InputOption::VALUE_REQUIRED, 'Event type: conference, concert, meetup, workshop, party, corporate, fundraiser, festival, wedding')
+            ->addOption('venue', null, InputOption::VALUE_REQUIRED, 'Venue name/address')
+            ->addOption('venue-map-url', null, InputOption::VALUE_REQUIRED, 'Google Maps or map link for the venue')
+            ->addOption('speakers', null, InputOption::VALUE_REQUIRED, 'Speakers JSON array: [{"name":"Jane","role":"CEO"}]')
+            ->addOption('schedule', null, InputOption::VALUE_REQUIRED, 'Schedule JSON array: [{"time":"9am","session":"Keynote","speaker":"Jane"}]')
+            ->addOption('tickets', null, InputOption::VALUE_REQUIRED, 'Tickets JSON array: [{"name":"GA","price":50,"features":["All talks"]}]')
+            ->addOption('no-registration', null, InputOption::VALUE_NONE, 'Skip the RSVP/registration form')
+            // List filter options
+            ->addOption('page-type', null, InputOption::VALUE_REQUIRED, 'Filter list by page template: event, landing, product, about, contact')
+            // AI edit options
+            ->addOption('instructions', null, InputOption::VALUE_REQUIRED, 'AI editing instructions (for ai-edit)')
+            // Analytics / checkout / thumbnail options
+            ->addOption('page-id', null, InputOption::VALUE_REQUIRED, 'Page ID (alternative to slug for analytics, checkout, thumbnail)')
+            ->addOption('package-id', null, InputOption::VALUE_REQUIRED, 'Stripe package ID (for checkout)')
+            ->addOption('buyer-email', null, InputOption::VALUE_REQUIRED, 'Buyer email (for checkout)')
+            // Compose options
+            ->addOption('source-type', null, InputOption::VALUE_REQUIRED, 'Source type: video, url, topic, content (for compose)')
+            ->addOption('source', null, InputOption::VALUE_REQUIRED, 'Source URL or text (for compose)')
+            ->addOption('style', null, InputOption::VALUE_REQUIRED, 'Page style: landing, article, product, portfolio (for compose)')
+            ->addOption('theme-mode', null, InputOption::VALUE_REQUIRED, 'Theme: dark or light (for compose)')
+            ->addOption('include-form', null, InputOption::VALUE_NONE, 'Include enrollment form (for compose)')
+            // Domain options
+            ->addOption('domain', null, InputOption::VALUE_REQUIRED, 'Custom domain name (for domains)')
+            ->addOption('mapping-id', null, InputOption::VALUE_REQUIRED, 'Domain mapping ID (for domains verify/remove)')
+            // Submissions options
+            ->addOption('format', null, InputOption::VALUE_REQUIRED, 'Export format: json, csv (for submissions)', 'json')
+            // Monetization options
+            ->addOption('package-name', null, InputOption::VALUE_REQUIRED, 'Pricing package name (for monetize)')
+            ->addOption('price', null, InputOption::VALUE_REQUIRED, 'Package price (for monetize)')
+            ->addOption('billing-type', null, InputOption::VALUE_REQUIRED, 'Billing: one_time, monthly, yearly (for monetize)', 'one_time')
+            ->addOption('features', null, InputOption::VALUE_REQUIRED, 'Package features, comma-separated (for monetize)');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -235,8 +293,35 @@ HELP
                     $componentId = $input->getOption('component-id');
                     return $this->removeComponent($iris, $io, $slug, $componentId);
 
+                case 'audit':
+                    return $this->auditPage($iris, $io, $input, $slug);
+
                 case 'brand':
                     return $this->brandPage($iris, $io, $input, $slug);
+
+                case 'ai-edit':
+                    return $this->aiEditPage($iris, $io, $input, $slug);
+
+                case 'analytics':
+                    return $this->analyticsPage($iris, $io, $input, $slug);
+
+                case 'submissions':
+                    return $this->submissionsPage($iris, $io, $input, $slug);
+
+                case 'checkout':
+                    return $this->checkoutPage($iris, $io, $input, $slug);
+
+                case 'monetize':
+                    return $this->monetizePage($iris, $io, $input, $slug);
+
+                case 'compose':
+                    return $this->composeNewPage($iris, $io, $input);
+
+                case 'thumbnail':
+                    return $this->thumbnailPage($iris, $io, $input, $slug);
+
+                case 'domains':
+                    return $this->domainsPage($iris, $io, $input, $slug);
 
                 default:
                     $io->error("Unknown action: {$action}");
@@ -537,8 +622,19 @@ HELP
         $response = $iris->pages->list();
         $pages = $response['data'] ?? [];
 
+        // Filter by page template type if --page-type is set
+        $pageType = $input->getOption('page-type');
+        if ($pageType) {
+            $pages = array_filter($pages, function ($page) use ($pageType) {
+                $template = $page['json_content']['meta']['template'] ?? null;
+                $type = $page['json_content']['type'] ?? null;
+                return $template === $pageType || $type === $pageType;
+            });
+            $pages = array_values($pages);
+        }
+
         if (empty($pages)) {
-            $io->info('No pages found.');
+            $io->info($pageType ? "No {$pageType} pages found." : 'No pages found.');
             return Command::SUCCESS;
         }
 
@@ -549,18 +645,19 @@ HELP
 
         $rows = [];
         foreach ($pages as $page) {
+            $template = $page['json_content']['meta']['template'] ?? $page['json_content']['type'] ?? '-';
             $rows[] = [
                 $page['id'],
                 $page['slug'],
                 $page['title'],
+                $template,
                 $this->formatStatus($page['status']),
-                $page['published_at'] ? date('Y-m-d H:i', strtotime($page['published_at'])) : '-',
-                count($page['json_content']['components'] ?? []) . ' components',
+                $this->getPublicUrl($page['slug']),
             ];
         }
 
         $io->table(
-            ['ID', 'Slug', 'Title', 'Status', 'Published', 'Components'],
+            ['ID', 'Slug', 'Title', 'Type', 'Status', 'URL'],
             $rows
         );
 
@@ -583,7 +680,7 @@ HELP
             $helper = $this->getHelper('question');
             $question = new ChoiceQuestion(
                 'Choose a template (or skip to build custom)',
-                ['Skip (custom)', 'landing', 'product', 'about', 'contact'],
+                ['Skip (custom)', 'landing', 'product', 'about', 'contact', 'event'],
                 0
             );
             $template = $helper->ask($input, $io, $question);
@@ -595,7 +692,9 @@ HELP
         $io->section('Building page...');
 
         // Create from template or custom
-        if ($template) {
+        if ($template === 'event') {
+            $page = $this->createEventFromCli($iris, $io, $input, $slug, $title, $seoTitle, $seoDescription);
+        } elseif ($template) {
             $page = $iris->pages->createFromTemplate($template, [
                 'slug' => $slug,
                 'title' => $title,
@@ -638,21 +737,135 @@ HELP
         }
 
         $pageData = $page['data'] ?? $page;
+        $publicUrl = $this->getPublicUrl($pageData['slug']);
         $io->success("Page created successfully!");
         $io->definitionList(
             ['ID' => $pageData['id']],
             ['Slug' => $pageData['slug']],
             ['Title' => $pageData['title']],
             ['Status' => $pageData['status']],
-            ['Components' => count($pageData['json_content']['components'] ?? [])]
+            ['Components' => count($pageData['json_content']['components'] ?? [])],
+            ['URL' => $publicUrl]
         );
 
         $io->note([
+            "URL: {$publicUrl}",
             "View: ./bin/iris pages view {$pageData['slug']}",
             "Publish: ./bin/iris pages publish {$pageData['slug']}",
         ]);
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * Collect event data from CLI options or interactive prompts, then create event page.
+     */
+    private function createEventFromCli(IRIS $iris, SymfonyStyle $io, InputInterface $input, string $slug, string $title, ?string $seoTitle, ?string $seoDescription): array
+    {
+        $io->section('Event Page Details');
+
+        // Required: event date
+        $eventDate = $input->getOption('event-date');
+        if (!$eventDate) {
+            $eventDate = $io->ask('Event date (e.g., March 28, 2026)');
+        }
+        if (!$eventDate) {
+            throw new \RuntimeException('Event date is required. Use --event-date="March 28, 2026"');
+        }
+
+        // Optional: event type
+        $eventType = $input->getOption('event-type');
+        if (!$eventType && !$input->getOption('slug')) {
+            $helper = $this->getHelper('question');
+            $question = new ChoiceQuestion(
+                'Event type',
+                ['conference', 'concert', 'meetup', 'workshop', 'party', 'corporate', 'fundraiser', 'festival', 'wedding'],
+                0
+            );
+            $eventType = $helper->ask($input, $io, $question);
+        }
+
+        // Optional: venue
+        $venue = $input->getOption('venue');
+        $venueMapUrl = $input->getOption('venue-map-url');
+
+        // Optional: description
+        $description = $seoDescription;
+
+        // Optional: speakers (JSON from CLI option)
+        $speakers = null;
+        $speakersJson = $input->getOption('speakers');
+        if ($speakersJson) {
+            $speakers = json_decode($speakersJson, true);
+            if (!is_array($speakers)) {
+                throw new \RuntimeException('Invalid --speakers JSON. Expected array: [{"name":"Jane","role":"CEO"}]');
+            }
+        }
+
+        // Optional: schedule (JSON from CLI option)
+        $schedule = null;
+        $scheduleJson = $input->getOption('schedule');
+        if ($scheduleJson) {
+            $schedule = json_decode($scheduleJson, true);
+            if (!is_array($schedule)) {
+                throw new \RuntimeException('Invalid --schedule JSON. Expected array: [{"time":"9am","session":"Keynote"}]');
+            }
+        }
+
+        // Optional: tickets (JSON from CLI option)
+        $tickets = null;
+        $ticketsJson = $input->getOption('tickets');
+        if ($ticketsJson) {
+            $tickets = json_decode($ticketsJson, true);
+            if (!is_array($tickets)) {
+                throw new \RuntimeException('Invalid --tickets JSON. Expected array: [{"name":"GA","price":50}]');
+            }
+        }
+
+        $includeRegistration = !$input->getOption('no-registration');
+
+        // Build event data
+        $eventData = [
+            'slug' => $slug,
+            'title' => $title,
+            'date' => $eventDate,
+            'seo_title' => $seoTitle,
+            'seo_description' => $seoDescription,
+            'event_type' => $eventType ?? 'conference',
+            'include_registration' => $includeRegistration,
+        ];
+
+        if ($description) {
+            $eventData['description'] = $description;
+        }
+        if ($venue) {
+            $eventData['venue'] = $venue;
+        }
+        if ($venueMapUrl) {
+            $eventData['venue_map_url'] = $venueMapUrl;
+        }
+        if ($speakers) {
+            $eventData['speakers'] = $speakers;
+        }
+        if ($schedule) {
+            $eventData['schedule'] = $schedule;
+        }
+        if ($tickets) {
+            $eventData['tickets'] = $tickets;
+        }
+
+        $io->text([
+            "Event: <info>{$title}</info>",
+            "Date: <info>{$eventDate}</info>",
+            "Type: <info>" . ($eventType ?? 'conference') . "</info>",
+            $venue ? "Venue: <info>{$venue}</info>" : '',
+            $speakers ? "Speakers: <info>" . count($speakers) . "</info>" : '',
+            $schedule ? "Schedule items: <info>" . count($schedule) . "</info>" : '',
+            $tickets ? "Ticket tiers: <info>" . count($tickets) . "</info>" : '',
+            "Registration form: <info>" . ($includeRegistration ? 'Yes' : 'No') . "</info>",
+        ]);
+
+        return $iris->pages->createFromTemplate('event', $eventData);
     }
 
     private function buildHeroComponent(SymfonyStyle $io, InputInterface $input): array
@@ -749,12 +962,14 @@ HELP
         }
 
         $io->title("Page: {$page['title']}");
+        $publicUrl = $this->getPublicUrl($page['slug']);
         $io->definitionList(
             ['ID' => $page['id']],
             ['Slug' => $page['slug']],
             ['Title' => $page['title']],
             ['Status' => $this->formatStatus($page['status'])],
-            ['Published' => $page['published_at'] ?? 'Not published']
+            ['Published' => $page['published_at'] ?? 'Not published'],
+            ['URL' => $publicUrl]
         );
 
         $io->section('JSON Content');
@@ -774,7 +989,9 @@ HELP
         $page = $response['data'] ?? $response;
 
         $result = $iris->pages->publish($page['id']);
+        $publicUrl = $this->getPublicUrl($slug);
         $io->success("Page '{$slug}' published!");
+        $io->text("URL: <href={$publicUrl}>{$publicUrl}</>");
 
         return Command::SUCCESS;
     }
@@ -832,7 +1049,9 @@ HELP
         $page = $response['data'] ?? $response;
 
         $result = $iris->pages->duplicate($page['id'], $newSlug);
+        $publicUrl = $this->getPublicUrl($newSlug);
         $io->success("Page duplicated as '{$newSlug}'!");
+        $io->text("URL: {$publicUrl}");
 
         return Command::SUCCESS;
     }
@@ -930,6 +1149,17 @@ HELP
             'archived' => '<fg=gray>◌ Archived</>',
             default => $status,
         };
+    }
+
+    /**
+     * Get the public URL for a page by slug.
+     */
+    private function getPublicUrl(string $slug): string
+    {
+        $currentEnv = getenv('IRIS_ENV') ?: 'production';
+        return $currentEnv === 'local'
+            ? "http://local.iris.freelabel.net:9300/p/{$slug}"
+            : "https://heyiris.io/p/{$slug}";
     }
 
     private function listComponents(IRIS $iris, SymfonyStyle $io, ?string $slug): int
@@ -1578,6 +1808,434 @@ HELP
         return array_filter($brand, fn($v) => $v !== null);
     }
 
+    // ─── Audit ─────────────────────────────────────────────────────────
+
+    private function auditPage(IRIS $iris, SymfonyStyle $io, InputInterface $input, ?string $slug): int
+    {
+        if (!$slug) {
+            $io->error('Slug is required. Usage: pages audit <slug> [--visual] [--from-lead=ID]');
+            return Command::FAILURE;
+        }
+
+        $isVisual = $input->getOption('visual');
+        $fromLead = $input->getOption('from-lead');
+        $isJson = $input->getOption('json');
+
+        $io->title("Page Audit: {$slug}");
+
+        // 1. Fetch page
+        $response = $iris->pages->getBySlug($slug, true);
+        $page = $response['data'] ?? $response;
+        $jsonContent = $page['json_content'] ?? [];
+        $theme = $jsonContent['theme'] ?? [];
+        $branding = $theme['branding'] ?? [];
+        $components = $jsonContent['components'] ?? [];
+        $primaryColor = $branding['primaryColor'] ?? null;
+
+        // 2. Run validation (same logic as validatePage)
+        $validation = $this->runValidationChecks($jsonContent);
+
+        // 3. Run brand check — count redundant color props
+        $brandIssues = [];
+        if ($primaryColor && !empty($components)) {
+            foreach ($components as $idx => $comp) {
+                $props = $comp['properties'] ?? $comp['props'] ?? [];
+                $type = $comp['type'] ?? 'Unknown';
+                foreach (['accentColor', 'labelColor', 'ctaColor'] as $colorProp) {
+                    $val = $props[$colorProp] ?? null;
+                    if ($val && strtolower((string)$val) === strtolower($primaryColor)) {
+                        $brandIssues[] = "[{$idx}] {$type}: {$colorProp}={$val} (redundant — matches brand)";
+                    }
+                }
+            }
+        }
+
+        // 4. Compute score (0-100)
+        $errorCount = count($validation['errors']);
+        $warningCount = count($validation['warnings']);
+        $brandIssueCount = count($brandIssues);
+        $score = max(0, 100 - ($errorCount * 10) - ($warningCount * 3) - ($brandIssueCount * 2));
+
+        // 5. Display results
+        $io->text("<fg=gray>Components: " . count($components) . "</>");
+        $io->text("<fg=gray>Brand: " . ($primaryColor ?: 'not set') . "</>");
+        $io->text("<fg=gray>Theme: " . ($theme['mode'] ?? 'not set') . "</>");
+        $io->newLine();
+
+        // Score badge
+        if ($score >= 90) {
+            $io->writeln("  <fg=green;options=bold>SCORE: {$score}/100</> — Excellent");
+        } elseif ($score >= 70) {
+            $io->writeln("  <fg=yellow;options=bold>SCORE: {$score}/100</> — Good (minor issues)");
+        } else {
+            $io->writeln("  <fg=red;options=bold>SCORE: {$score}/100</> — Needs attention");
+        }
+        $io->newLine();
+
+        // Passes
+        if (!empty($validation['passes'])) {
+            $io->text('<fg=green>Passed:</>');
+            foreach ($validation['passes'] as $msg) {
+                $io->writeln("  <fg=green>\xe2\x9c\x93</> {$msg}");
+            }
+        }
+
+        // Warnings
+        if (!empty($validation['warnings'])) {
+            $io->newLine();
+            $io->text('<fg=yellow>Warnings:</>');
+            foreach ($validation['warnings'] as $msg) {
+                $io->writeln("  <fg=yellow>\xe2\x9a\xa0</> {$msg}");
+            }
+        }
+
+        // Errors
+        if (!empty($validation['errors'])) {
+            $io->newLine();
+            $io->text('<fg=red>Errors:</>');
+            foreach ($validation['errors'] as $msg) {
+                $io->writeln("  <fg=red>\xe2\x9c\x97</> {$msg}");
+            }
+        }
+
+        // Brand issues
+        if (!empty($brandIssues)) {
+            $io->newLine();
+            $io->text('<fg=cyan>Redundant brand props (removable):</>');
+            foreach ($brandIssues as $msg) {
+                $io->writeln("  <fg=cyan>i</> {$msg}");
+            }
+        }
+
+        // 6. Generate markdown report
+        $reportLines = [
+            "# Page Audit Report — {$slug}",
+            "",
+            "**Generated:** " . date('Y-m-d H:i:s'),
+            "**Score:** {$score}/100",
+            "**Components:** " . count($components),
+            "**Brand Color:** " . ($primaryColor ?: 'not set'),
+            "**Theme Mode:** " . ($theme['mode'] ?? 'not set'),
+            "",
+        ];
+
+        if (!empty($validation['errors'])) {
+            $reportLines[] = "## Errors ({$errorCount})";
+            $reportLines[] = "";
+            foreach ($validation['errors'] as $msg) {
+                $reportLines[] = "- {$msg}";
+            }
+            $reportLines[] = "";
+        }
+
+        if (!empty($validation['warnings'])) {
+            $reportLines[] = "## Warnings ({$warningCount})";
+            $reportLines[] = "";
+            foreach ($validation['warnings'] as $msg) {
+                $reportLines[] = "- {$msg}";
+            }
+            $reportLines[] = "";
+        }
+
+        if (!empty($brandIssues)) {
+            $reportLines[] = "## Redundant Brand Props ({$brandIssueCount})";
+            $reportLines[] = "";
+            foreach ($brandIssues as $msg) {
+                $reportLines[] = "- {$msg}";
+            }
+            $reportLines[] = "";
+        }
+
+        $reportLines[] = "## Passed (" . count($validation['passes']) . ")";
+        $reportLines[] = "";
+        foreach ($validation['passes'] as $msg) {
+            $reportLines[] = "- {$msg}";
+        }
+
+        $report = implode("\n", $reportLines);
+
+        // 7. Run Playwright visual tests if --visual
+        if ($isVisual) {
+            $io->newLine();
+            $io->section('Visual Tests (Playwright)');
+
+            // Find project root (go up from sdk/php/src/Console/Commands/)
+            $projectRoot = realpath(__DIR__ . '/../../../../../..');
+            if (!$projectRoot || !is_dir("{$projectRoot}/tests/e2e")) {
+                $projectRoot = realpath(__DIR__ . '/../../../../..');
+            }
+
+            if (!$projectRoot || !file_exists("{$projectRoot}/playwright.config.ts")) {
+                $io->warning("Could not locate playwright.config.ts — skipping visual tests. Run manually:\n  PAGE_SLUG={$slug} npx playwright test client-page-audit --project=local");
+            } else {
+                $envVars = "PAGE_SLUG=" . escapeshellarg($slug);
+                if ($primaryColor) {
+                    $envVars .= " PRIMARY_COLOR=" . escapeshellarg($primaryColor);
+                }
+                if (!empty($theme['mode'])) {
+                    $envVars .= " THEME_MODE=" . escapeshellarg($theme['mode']);
+                }
+
+                $cmd = "cd " . escapeshellarg($projectRoot) . " && {$envVars} npx playwright test client-page-audit --project=local 2>&1";
+                $io->text("<fg=gray>Running: {$cmd}</>");
+                $io->newLine();
+
+                $exitCode = 0;
+                passthru($cmd, $exitCode);
+
+                if ($exitCode === 0) {
+                    $io->success('Visual tests passed');
+                    $report .= "\n\n## Visual Tests\n\nAll 6 Playwright tests passed.\n";
+                    $report .= "Screenshots: test-results/audit/{$slug}/\n";
+                } else {
+                    $io->warning("Visual tests had failures (exit code: {$exitCode})");
+                    $report .= "\n\n## Visual Tests\n\nSome tests failed (exit code: {$exitCode}). Check test-results/audit/{$slug}/\n";
+                }
+            }
+        }
+
+        // 8. Attach report to lead if --from-lead
+        if ($fromLead) {
+            $io->newLine();
+            $io->section('Attaching to Lead');
+
+            // Write report file
+            $dir = $input->getOption('dir') ?: './pages';
+            if (!is_dir($dir)) {
+                mkdir($dir, 0755, true);
+            }
+            $reportPath = "{$dir}/{$slug}-audit-report.md";
+            file_put_contents($reportPath, $report);
+            $io->text("Report saved: {$reportPath}");
+
+            try {
+                // Upload as file deliverable
+                $deliverable = $iris->leads->deliverables((int)$fromLead)->uploadFile(
+                    realpath($reportPath),
+                    ['title' => "Page Audit Report — {$slug} (Score: {$score}/100)"]
+                );
+                $io->success("Audit report attached as deliverable to lead #{$fromLead}");
+
+                // Also create a link deliverable to the page itself
+                $currentEnv = getenv('IRIS_ENV') ?: 'production';
+                $pageUrl = $currentEnv === 'local'
+                    ? "http://local.iris.freelabel.net:9300/p/{$slug}"
+                    : "https://heyiris.io/p/{$slug}";
+
+                $iris->leads->deliverables((int)$fromLead)->create([
+                    'type' => 'link',
+                    'title' => "Live Page — {$slug}",
+                    'external_url' => $pageUrl,
+                ]);
+                $io->text("Page link deliverable created: {$pageUrl}");
+            } catch (\Exception $e) {
+                $io->warning("Could not attach to lead: " . $e->getMessage());
+            }
+        }
+
+        // JSON output
+        if ($isJson) {
+            $io->writeln(json_encode([
+                'slug' => $slug,
+                'score' => $score,
+                'errors' => $validation['errors'],
+                'warnings' => $validation['warnings'],
+                'passes' => $validation['passes'],
+                'brandIssues' => $brandIssues,
+                'componentCount' => count($components),
+                'primaryColor' => $primaryColor,
+                'themeMode' => $theme['mode'] ?? null,
+            ], JSON_PRETTY_PRINT));
+        }
+
+        $io->newLine();
+        return $errorCount === 0 ? Command::SUCCESS : Command::FAILURE;
+    }
+
+    /**
+     * Run validation checks and return structured results (no output).
+     * Shared by both validatePage and auditPage.
+     */
+    private function runValidationChecks(array $jsonContent): array
+    {
+        $schema = $this->getComponentSchema();
+        $theme = $jsonContent['theme'] ?? [];
+        $components = $jsonContent['components'] ?? [];
+
+        $errors = [];
+        $warnings = [];
+        $passes = [];
+
+        // ─── Theme validation ────────────────────────────────────────
+        $themeMode = $theme['mode'] ?? null;
+        if ($themeMode) {
+            $passes[] = "Theme mode set: {$themeMode}";
+        } else {
+            $warnings[] = 'No theme.mode set — components will use their own themeMode or default to dark';
+        }
+
+        $branding = $theme['branding'] ?? [];
+        if (!empty($branding['primaryColor'])) {
+            $passes[] = "Brand color: {$branding['primaryColor']}";
+        } else {
+            $warnings[] = 'No theme.branding.primaryColor — components will use default indigo (#4f46e5)';
+        }
+        if (!empty($branding['fontFamily'])) {
+            $passes[] = "Font family: {$branding['fontFamily']}";
+        } else {
+            $warnings[] = 'No theme.branding.fontFamily — page will use system fonts';
+        }
+
+        // ─── Redundant accentColor props ────────────────────────────
+        $primaryColor = $branding['primaryColor'] ?? null;
+        if ($primaryColor && !empty($components)) {
+            $redundant = [];
+            foreach ($components as $idx => $comp) {
+                $props = $comp['properties'] ?? $comp['props'] ?? [];
+                $type = $comp['type'] ?? 'Unknown';
+                foreach (['accentColor', 'labelColor', 'ctaColor'] as $colorProp) {
+                    $val = $props[$colorProp] ?? null;
+                    if ($val && strtolower((string)$val) === strtolower($primaryColor)) {
+                        $redundant[] = "[{$idx}] {$type}: {$colorProp}={$val}";
+                    }
+                }
+            }
+            if (!empty($redundant)) {
+                $warnings[] = count($redundant) . " component(s) have redundant color props matching brand ({$primaryColor}) — these now inherit via CSS variable and can be removed:\n    " . implode("\n    ", $redundant) . "\n    Run: pages brand <slug> --from-lead=<ID> --apply (or remove manually)";
+            }
+        }
+
+        // ─── Theme mode consistency ──────────────────────────────────
+        if ($themeMode && !empty($components)) {
+            $mismatched = [];
+            foreach ($components as $idx => $comp) {
+                $props = $comp['properties'] ?? $comp['props'] ?? [];
+                $compTheme = $props['themeMode'] ?? null;
+                if ($compTheme && $compTheme !== $themeMode) {
+                    $mismatched[] = "[{$idx}] {$comp['type']}: themeMode={$compTheme}";
+                }
+            }
+            if (!empty($mismatched)) {
+                $warnings[] = "Mixed theme modes — page is \"{$themeMode}\" but " . count($mismatched) . " component(s) override:\n    " . implode("\n    ", $mismatched) . "\n    (This is fine if those components have dark backgrounds)";
+            } else {
+                $passes[] = 'Theme modes consistent across all components';
+            }
+        }
+
+        // ─── Contrast & visibility checks ────────────────────────────
+        foreach ($components as $idx => $comp) {
+            $type = $comp['type'] ?? null;
+            $props = $comp['properties'] ?? $comp['props'] ?? [];
+            $compTheme = $props['themeMode'] ?? $themeMode ?? 'dark';
+
+            if ($type === 'Hero' && !empty($props['backgroundImage'])) {
+                if ($compTheme === 'light') {
+                    $errors[] = "[{$idx}] Hero: has backgroundImage but themeMode is \"light\" — dark text will be invisible on dark photo. Set themeMode: \"dark\"";
+                } else {
+                    $passes[] = "[{$idx}] Hero: backgroundImage + dark theme — text visible";
+                }
+                $hasOverlay = !empty($props['overlayGradient']) || (isset($props['overlayOpacity']) && $props['overlayOpacity'] > 0);
+                if (!$hasOverlay) {
+                    $warnings[] = "[{$idx}] Hero: backgroundImage without overlay — text may be hard to read. Add overlayOpacity or overlayGradient";
+                }
+            }
+
+            if ($type === 'Hero' && isset($props['overlayOpacity']) && $props['overlayOpacity'] > 0.5 && $compTheme === 'light') {
+                $errors[] = "[{$idx}] Hero: overlayOpacity={$props['overlayOpacity']} (dark overlay) but themeMode=\"light\" — dark text on dark overlay. Set themeMode: \"dark\"";
+            }
+
+            if ($type === 'SiteNavigation' && !empty($props['transparent'])) {
+                $navTheme = $props['themeMode'] ?? null;
+                if (!$navTheme && $themeMode === 'light') {
+                    $warnings[] = "[{$idx}] SiteNavigation: transparent=true on light page without explicit themeMode";
+                } elseif ($navTheme === 'light' && $themeMode === 'light') {
+                    $warnings[] = "[{$idx}] SiteNavigation: transparent=true with themeMode=\"light\" — if Hero has dark background, nav links invisible";
+                } else {
+                    $passes[] = "[{$idx}] SiteNavigation: transparent nav theme configured correctly";
+                }
+            }
+        }
+
+        // ─── Component validation ────────────────────────────────────
+        if (empty($components)) {
+            $warnings[] = 'Page has no components';
+        }
+
+        foreach ($components as $idx => $comp) {
+            $type = $comp['type'] ?? null;
+            $props = $comp['properties'] ?? $comp['props'] ?? [];
+
+            if (!$type) {
+                $errors[] = "[{$idx}] Component missing 'type' field";
+                continue;
+            }
+
+            if (!isset($schema[$type])) {
+                $errors[] = "[{$idx}] Unknown component type: \"{$type}\" — will show 'not implemented' fallback";
+                continue;
+            }
+
+            $passes[] = "[{$idx}] {$type} — type recognized";
+
+            if (!isset($comp['properties']) && !isset($comp['props'])) {
+                $errors[] = "[{$idx}] {$type}: missing both \"properties\" and \"props\" keys";
+            }
+
+            if (empty($comp['id'])) {
+                $warnings[] = "[{$idx}] {$type}: missing 'id' field";
+            }
+
+            // Type-specific checks
+            if ($type === 'SiteNavigation' && isset($props['logo'])) {
+                $logo = $props['logo'];
+                if (is_array($logo) && empty($logo['imageUrl']) && empty($logo['image'])) {
+                    $warnings[] = "[{$idx}] SiteNavigation: logo object has no imageUrl or image";
+                }
+            }
+
+            if ($type === 'Hero') {
+                if (empty($props['backgroundImage']) && empty($props['backgroundGradient'])) {
+                    $warnings[] = "[{$idx}] Hero: no backgroundImage or backgroundGradient";
+                }
+            }
+
+            if ($type === 'JumbotronHero' && isset($props['logo']) && is_array($props['logo'])) {
+                $errors[] = "[{$idx}] JumbotronHero: logo should be a string URL, not an object";
+            }
+
+            // Check array props
+            $arrayProps = [
+                'FeatureTabs' => 'tabs', 'ProcessSteps' => 'steps', 'AccordionFeatures' => 'features',
+                'FeatureGrid' => 'features', 'FeatureCardsGrid' => 'features', 'FeatureIconsGrid' => 'features',
+                'SkillsGrid' => 'skills', 'ScrollShowcase' => 'items', 'StatsSection' => 'stats',
+                'StatsCounter' => 'stats', 'PricingPlans' => 'plans', 'BenefitsSection' => 'benefits',
+                'GettingStartedSteps' => 'steps', 'ComparisonCards' => 'cards', 'PortfolioGrid' => 'items',
+                'AgentExamples' => 'examples', 'SiteNavigation' => 'links', 'SiteFooter' => 'columns',
+            ];
+
+            if (isset($arrayProps[$type])) {
+                $arrayKey = $arrayProps[$type];
+                if (empty($props[$arrayKey])) {
+                    $warnings[] = "[{$idx}] {$type}: \"{$arrayKey}\" is empty or missing";
+                } elseif (!is_array($props[$arrayKey])) {
+                    $errors[] = "[{$idx}] {$type}: \"{$arrayKey}\" should be an array";
+                }
+            }
+
+            // Unknown props
+            $expectedProps = $schema[$type];
+            $actualProps = array_keys($props);
+            $unknown = array_diff($actualProps, $expectedProps);
+            $harmless = ['themeMode', 'backgroundColor', 'textColor', 'accentColor', 'id'];
+            $unknown = array_diff($unknown, $harmless);
+            if (!empty($unknown)) {
+                $warnings[] = "[{$idx}] {$type}: unrecognized props: " . implode(', ', $unknown);
+            }
+        }
+
+        return ['errors' => $errors, 'warnings' => $warnings, 'passes' => $passes];
+    }
+
     private function validatePage(IRIS $iris, SymfonyStyle $io, InputInterface $input, ?string $slug): int
     {
         if (!$slug) {
@@ -1606,218 +2264,13 @@ HELP
             $jsonContent = $page['json_content'] ?? [];
         }
 
-        $schema = $this->getComponentSchema();
-        $theme = $jsonContent['theme'] ?? [];
         $components = $jsonContent['components'] ?? [];
 
-        $errors = [];
-        $warnings = [];
-        $passes = [];
-
-        // ─── Theme validation ────────────────────────────────────────
-        $themeMode = $theme['mode'] ?? null;
-        if ($themeMode) {
-            $passes[] = "Theme mode set: {$themeMode}";
-        } else {
-            $warnings[] = 'No theme.mode set — components will use their own themeMode or default to dark';
-        }
-
-        // Check branding
-        $branding = $theme['branding'] ?? [];
-        if (!empty($branding['primaryColor'])) {
-            $passes[] = "Brand color: {$branding['primaryColor']}";
-        } else {
-            $warnings[] = 'No theme.branding.primaryColor — components will use default indigo (#4f46e5)';
-        }
-        if (!empty($branding['fontFamily'])) {
-            $passes[] = "Font family: {$branding['fontFamily']}";
-        } else {
-            $warnings[] = 'No theme.branding.fontFamily — page will use system fonts';
-        }
-
-        // ─── Redundant accentColor props ────────────────────────────
-        $primaryColor = $branding['primaryColor'] ?? null;
-        if ($primaryColor && !empty($components)) {
-            $redundant = [];
-            foreach ($components as $idx => $comp) {
-                $props = $comp['properties'] ?? $comp['props'] ?? [];
-                $type = $comp['type'] ?? 'Unknown';
-                foreach (['accentColor', 'labelColor', 'ctaColor'] as $colorProp) {
-                    $val = $props[$colorProp] ?? null;
-                    if ($val && strtolower((string)$val) === strtolower($primaryColor)) {
-                        $redundant[] = "[{$idx}] {$type}: {$colorProp}={$val}";
-                    }
-                }
-            }
-            if (!empty($redundant)) {
-                $warnings[] = count($redundant) . " component(s) have redundant color props matching brand ({$primaryColor}) — these now inherit via CSS variable and can be removed:\n    " . implode("\n    ", $redundant) . "\n    Run: pages brand {$slug} --from-lead=<ID> --apply (or remove manually)";
-            }
-        }
-
-        // ─── Theme mode consistency ──────────────────────────────────
-        if ($themeMode && !empty($components)) {
-            $mismatched = [];
-            foreach ($components as $idx => $comp) {
-                $props = $comp['properties'] ?? $comp['props'] ?? [];
-                $compTheme = $props['themeMode'] ?? null;
-                if ($compTheme && $compTheme !== $themeMode) {
-                    $mismatched[] = "[{$idx}] {$comp['type']}: themeMode={$compTheme}";
-                }
-            }
-            if (!empty($mismatched)) {
-                // This is now a warning, not an error — mixed themes are valid
-                // (e.g., Hero with dark bg on a light page)
-                $warnings[] = "Mixed theme modes — page is \"{$themeMode}\" but " . count($mismatched) . " component(s) override:\n    " . implode("\n    ", $mismatched) . "\n    (This is fine if those components have dark backgrounds)";
-            } else {
-                $passes[] = 'Theme modes consistent across all components';
-            }
-        }
-
-        // ─── Contrast & visibility checks ────────────────────────────
-        foreach ($components as $idx => $comp) {
-            $type = $comp['type'] ?? null;
-            $props = $comp['properties'] ?? $comp['props'] ?? [];
-            $compTheme = $props['themeMode'] ?? $themeMode ?? 'dark';
-
-            // Hero with backgroundImage should be dark (dark photo = need white text)
-            if ($type === 'Hero' && !empty($props['backgroundImage'])) {
-                if ($compTheme === 'light') {
-                    $errors[] = "[{$idx}] Hero: has backgroundImage but themeMode is \"light\" — dark text will be invisible on dark photo. Set themeMode: \"dark\"";
-                } else {
-                    $passes[] = "[{$idx}] Hero: backgroundImage + dark theme — text visible";
-                }
-
-                // Check overlay exists for text readability
-                $hasOverlay = !empty($props['overlayGradient']) || (isset($props['overlayOpacity']) && $props['overlayOpacity'] > 0);
-                if (!$hasOverlay) {
-                    $warnings[] = "[{$idx}] Hero: backgroundImage without overlay — text may be hard to read. Add overlayOpacity or overlayGradient";
-                }
-            }
-
-            // Heavy overlay + light theme = contradiction
-            if ($type === 'Hero' && isset($props['overlayOpacity']) && $props['overlayOpacity'] > 0.5 && $compTheme === 'light') {
-                $errors[] = "[{$idx}] Hero: overlayOpacity={$props['overlayOpacity']} (dark overlay) but themeMode=\"light\" — dark text on dark overlay. Set themeMode: \"dark\"";
-            }
-
-            // Transparent nav on light page without explicit dark themeMode
-            if ($type === 'SiteNavigation' && !empty($props['transparent'])) {
-                $navTheme = $props['themeMode'] ?? null;
-                if (!$navTheme && $themeMode === 'light') {
-                    $warnings[] = "[{$idx}] SiteNavigation: transparent=true on light page without explicit themeMode — nav text may be invisible over dark Hero (component code auto-fixes this, but setting themeMode: \"dark\" is clearer)";
-                } elseif ($navTheme === 'light' && $themeMode === 'light') {
-                    $warnings[] = "[{$idx}] SiteNavigation: transparent=true with themeMode=\"light\" — if Hero has a dark background, nav links will be invisible at top of page";
-                } else {
-                    $passes[] = "[{$idx}] SiteNavigation: transparent nav theme configured correctly";
-                }
-            }
-        }
-
-        // ─── Component validation ────────────────────────────────────
-        if (empty($components)) {
-            $warnings[] = 'Page has no components';
-        }
-
-        foreach ($components as $idx => $comp) {
-            $type = $comp['type'] ?? null;
-            $props = $comp['properties'] ?? $comp['props'] ?? [];
-            $compId = $comp['id'] ?? "index-{$idx}";
-
-            // Check type is implemented
-            if (!$type) {
-                $errors[] = "[{$idx}] Component missing 'type' field";
-                continue;
-            }
-
-            if (!isset($schema[$type])) {
-                $errors[] = "[{$idx}] Unknown component type: \"{$type}\" — will show 'not implemented' fallback";
-                continue;
-            }
-
-            $passes[] = "[{$idx}] {$type} — type recognized";
-
-            // Check for "properties" vs "props" key
-            // Note: _slug.vue normalizes both — `comp.props || comp.properties` — so both work.
-            // But flag if NEITHER is present.
-            if (!isset($comp['properties']) && !isset($comp['props'])) {
-                $errors[] = "[{$idx}] {$type}: missing both \"properties\" and \"props\" keys — component has no configuration";
-            }
-
-            // Check component has an id
-            if (empty($comp['id'])) {
-                $warnings[] = "[{$idx}] {$type}: missing 'id' field";
-            }
-
-            // ─── Type-specific prop validation ───────────────────────
-
-            // SiteNavigation logo check
-            if ($type === 'SiteNavigation' && isset($props['logo'])) {
-                $logo = $props['logo'];
-                if (is_array($logo)) {
-                    if (empty($logo['imageUrl']) && empty($logo['image'])) {
-                        $warnings[] = "[{$idx}] SiteNavigation: logo object has no imageUrl or image — logo won't render";
-                    }
-                }
-            }
-
-            // Hero checks
-            if ($type === 'Hero') {
-                if (empty($props['backgroundImage']) && empty($props['backgroundGradient'])) {
-                    $warnings[] = "[{$idx}] Hero: no backgroundImage or backgroundGradient — will use default indigo gradient";
-                }
-                if (!empty($props['primaryButtonVariant']) && !in_array($props['primaryButtonVariant'], ['red', 'filled', 'ghost', 'default'])) {
-                    $warnings[] = "[{$idx}] Hero: unknown primaryButtonVariant \"{$props['primaryButtonVariant']}\" — use red, filled, ghost, or default";
-                }
-            }
-
-            // JumbotronHero logo check
-            if ($type === 'JumbotronHero' && isset($props['logo'])) {
-                if (is_array($props['logo'])) {
-                    $errors[] = "[{$idx}] JumbotronHero: logo should be a string URL, not an object";
-                }
-            }
-
-            // Components with array data — check arrays aren't empty
-            $arrayProps = [
-                'FeatureTabs' => 'tabs',
-                'ProcessSteps' => 'steps',
-                'AccordionFeatures' => 'features',
-                'FeatureGrid' => 'features',
-                'FeatureCardsGrid' => 'features',
-                'FeatureIconsGrid' => 'features',
-                'SkillsGrid' => 'skills',
-                'ScrollShowcase' => 'items',
-                'StatsSection' => 'stats',
-                'StatsCounter' => 'stats',
-                'PricingPlans' => 'plans',
-                'BenefitsSection' => 'benefits',
-                'GettingStartedSteps' => 'steps',
-                'ComparisonCards' => 'cards',
-                'PortfolioGrid' => 'items',
-                'AgentExamples' => 'examples',
-                'SiteNavigation' => 'links',
-                'SiteFooter' => 'columns',
-            ];
-
-            if (isset($arrayProps[$type])) {
-                $arrayKey = $arrayProps[$type];
-                if (empty($props[$arrayKey])) {
-                    $warnings[] = "[{$idx}] {$type}: \"{$arrayKey}\" is empty or missing — component will render blank";
-                } elseif (!is_array($props[$arrayKey])) {
-                    $errors[] = "[{$idx}] {$type}: \"{$arrayKey}\" should be an array, got " . gettype($props[$arrayKey]);
-                }
-            }
-
-            // Check for unknown props (potential typos)
-            $expectedProps = $schema[$type];
-            $actualProps = array_keys($props);
-            $unknown = array_diff($actualProps, $expectedProps);
-            // Filter out commonly used extra props that are harmless
-            $harmless = ['themeMode', 'backgroundColor', 'textColor', 'accentColor', 'id'];
-            $unknown = array_diff($unknown, $harmless);
-            if (!empty($unknown)) {
-                $warnings[] = "[{$idx}] {$type}: unrecognized props: " . implode(', ', $unknown) . " — may be ignored by renderer";
-            }
-        }
+        // Run shared validation logic
+        $result = $this->runValidationChecks($jsonContent);
+        $errors = $result['errors'];
+        $warnings = $result['warnings'];
+        $passes = $result['passes'];
 
         // ─── Output ──────────────────────────────────────────────────
 
@@ -1876,6 +2329,478 @@ HELP
         return empty($errors) ? Command::SUCCESS : Command::FAILURE;
     }
 
+    // ─── Genesis Integration Commands ───────────────────────────────
+
+    private function aiEditPage(IRIS $iris, SymfonyStyle $io, InputInterface $input, ?string $slug): int
+    {
+        if (!$slug) {
+            $io->error('Slug is required. Usage: pages ai-edit <slug> --instructions="..."');
+            return Command::FAILURE;
+        }
+
+        $instructions = $input->getOption('instructions');
+        if (!$instructions) {
+            $instructions = $io->ask('What changes should the AI make?');
+        }
+        if (!$instructions) {
+            $io->error('--instructions is required.');
+            return Command::FAILURE;
+        }
+
+        $response = $iris->pages->getBySlug($slug, false);
+        $page = $response['data'] ?? $response;
+
+        $io->text("AI editing <info>{$slug}</info>...");
+        $result = $iris->pages->aiEdit($page['id'], $instructions);
+
+        if ($input->getOption('json')) {
+            $io->writeln(json_encode($result, JSON_PRETTY_PRINT));
+            return Command::SUCCESS;
+        }
+
+        $data = $result['data'] ?? $result;
+        $io->success($result['message'] ?? 'AI edits applied');
+
+        if (!empty($data['changes'])) {
+            $io->section('Changes Applied');
+            foreach ($data['changes'] as $change) {
+                $io->writeln("  - {$change}");
+            }
+        }
+
+        $io->note("View result: ./bin/iris pages view {$slug}");
+        return Command::SUCCESS;
+    }
+
+    private function analyticsPage(IRIS $iris, SymfonyStyle $io, InputInterface $input, ?string $slug): int
+    {
+        $pageId = $input->getOption('page-id');
+
+        if (!$slug && !$pageId) {
+            $io->error('Slug or --page-id is required. Usage: pages analytics <slug>');
+            return Command::FAILURE;
+        }
+
+        if (!$pageId) {
+            $response = $iris->pages->getBySlug($slug, false);
+            $page = $response['data'] ?? $response;
+            $pageId = $page['id'];
+        }
+
+        $result = $iris->pages->analytics((int) $pageId);
+
+        if ($input->getOption('json')) {
+            $io->writeln(json_encode($result, JSON_PRETTY_PRINT));
+            return Command::SUCCESS;
+        }
+
+        $data = $result['data'] ?? $result;
+        $io->title('Analytics: ' . ($slug ?? "Page #{$pageId}"));
+
+        $definitions = [];
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                $value = json_encode($value, JSON_UNESCAPED_SLASHES);
+            }
+            $label = ucwords(str_replace('_', ' ', $key));
+            $definitions[] = [$label => (string) ($value ?? '-')];
+        }
+
+        if (!empty($definitions)) {
+            $io->definitionList(...$definitions);
+        } else {
+            $io->info('No analytics data available yet.');
+        }
+
+        return Command::SUCCESS;
+    }
+
+    private function submissionsPage(IRIS $iris, SymfonyStyle $io, InputInterface $input, ?string $slug): int
+    {
+        if (!$slug) {
+            $io->error('Slug is required. Usage: pages submissions <slug>');
+            return Command::FAILURE;
+        }
+
+        $response = $iris->pages->getBySlug($slug, false);
+        $page = $response['data'] ?? $response;
+        $format = $input->getOption('format') ?? 'json';
+
+        if ($format === 'csv') {
+            $result = $iris->pages->submissions($page['id'], 'export', 'csv');
+            $data = $result['data'] ?? $result;
+            $csv = $data['csv'] ?? '';
+            if ($csv) {
+                $io->writeln($csv);
+            } else {
+                $io->info('No submissions to export.');
+            }
+            return Command::SUCCESS;
+        }
+
+        $result = $iris->pages->submissions($page['id']);
+
+        if ($input->getOption('json')) {
+            $io->writeln(json_encode($result, JSON_PRETTY_PRINT));
+            return Command::SUCCESS;
+        }
+
+        $data = $result['data'] ?? $result;
+        $submissions = $data['submissions'] ?? [];
+        $count = $data['count'] ?? count($submissions);
+
+        $io->title("Submissions: {$slug}");
+
+        if (empty($submissions)) {
+            $io->info('No submissions yet.');
+            return Command::SUCCESS;
+        }
+
+        // Build table from submission data
+        $rows = [];
+        $headers = null;
+        foreach ($submissions as $sub) {
+            $rowData = $sub['data'] ?? $sub;
+            if ($headers === null) {
+                $headers = array_map(fn($k) => ucwords(str_replace('_', ' ', $k)), array_keys($rowData));
+            }
+            $rows[] = array_map(fn($v) => is_array($v) ? json_encode($v) : (string) ($v ?? '-'), array_values($rowData));
+        }
+
+        $io->table($headers ?? ['Data'], $rows);
+        $io->text("{$count} submission(s)");
+
+        return Command::SUCCESS;
+    }
+
+    private function checkoutPage(IRIS $iris, SymfonyStyle $io, InputInterface $input, ?string $slug): int
+    {
+        if (!$slug) {
+            $io->error('Slug is required. Usage: pages checkout <slug> --package-id=X --buyer-email=Y');
+            return Command::FAILURE;
+        }
+
+        $packageId = $input->getOption('package-id');
+        $buyerEmail = $input->getOption('buyer-email');
+
+        if (!$packageId) {
+            $packageId = $io->ask('Package ID');
+        }
+        if (!$buyerEmail) {
+            $buyerEmail = $io->ask('Buyer email');
+        }
+        if (!$packageId || !$buyerEmail) {
+            $io->error('--package-id and --buyer-email are required.');
+            return Command::FAILURE;
+        }
+
+        $response = $iris->pages->getBySlug($slug, false);
+        $page = $response['data'] ?? $response;
+
+        $result = $iris->pages->createCheckoutLink($page['id'], $packageId, $buyerEmail);
+
+        if ($input->getOption('json')) {
+            $io->writeln(json_encode($result, JSON_PRETTY_PRINT));
+            return Command::SUCCESS;
+        }
+
+        $data = $result['data'] ?? $result;
+        $checkoutUrl = $data['checkout_url'] ?? null;
+
+        if ($checkoutUrl) {
+            $io->success('Checkout link created');
+            $io->writeln($checkoutUrl);
+        } else {
+            $io->warning('No checkout URL returned.');
+            $io->writeln(json_encode($data, JSON_PRETTY_PRINT));
+        }
+
+        return Command::SUCCESS;
+    }
+
+    private function monetizePage(IRIS $iris, SymfonyStyle $io, InputInterface $input, ?string $slug): int
+    {
+        if (!$slug) {
+            $io->error('Slug is required. Usage: pages monetize <slug> --package-name="Pro" --price=29');
+            return Command::FAILURE;
+        }
+
+        $response = $iris->pages->getBySlug($slug, false);
+        $page = $response['data'] ?? $response;
+
+        // Build package from options or interactive
+        $packageName = $input->getOption('package-name');
+        $price = $input->getOption('price');
+
+        if (!$packageName) {
+            $packageName = $io->ask('Package name', 'Basic');
+        }
+        if (!$price) {
+            $price = $io->ask('Price', '0');
+        }
+
+        $billingType = $input->getOption('billing-type') ?? 'one_time';
+        $features = [];
+        if ($featuresStr = $input->getOption('features')) {
+            $features = array_map('trim', explode(',', $featuresStr));
+        }
+
+        $packages = [[
+            'name' => $packageName,
+            'price' => (float) $price,
+            'billingType' => $billingType,
+            'features' => $features,
+        ]];
+
+        $result = $iris->pages->setupMonetization($page['id'], $packages);
+
+        if ($input->getOption('json')) {
+            $io->writeln(json_encode($result, JSON_PRETTY_PRINT));
+            return Command::SUCCESS;
+        }
+
+        $data = $result['data'] ?? $result;
+        $io->success($result['message'] ?? "Pricing added to {$slug}");
+        $io->definitionList(
+            ['Package' => $packageName],
+            ['Price' => '$' . number_format((float) $price, 2)],
+            ['Billing' => $billingType],
+            ['Features' => !empty($features) ? implode(', ', $features) : '-'],
+            ['URL' => $data['url'] ?? $this->getPublicUrl($slug)]
+        );
+
+        return Command::SUCCESS;
+    }
+
+    private function composeNewPage(IRIS $iris, SymfonyStyle $io, InputInterface $input): int
+    {
+        $sourceType = $input->getOption('source-type');
+        $source = $input->getOption('source');
+
+        if (!$sourceType) {
+            $helper = $this->getHelper('question');
+            $question = new ChoiceQuestion(
+                'What source should the AI use?',
+                ['topic', 'url', 'video', 'content'],
+                0
+            );
+            $sourceType = $helper->ask($input, $io, $question);
+        }
+
+        if (!$source) {
+            $prompts = [
+                'topic' => 'Describe the page topic',
+                'url' => 'Enter the website URL',
+                'video' => 'Enter the video URL',
+                'content' => 'Paste the content',
+            ];
+            $source = $io->ask($prompts[$sourceType] ?? 'Enter source');
+        }
+        if (!$source) {
+            $io->error('--source is required.');
+            return Command::FAILURE;
+        }
+
+        $options = [];
+        if ($style = $input->getOption('style')) {
+            $options['style'] = $style;
+        }
+        if ($themeMode = $input->getOption('theme-mode')) {
+            $options['theme_mode'] = $themeMode;
+        }
+        if ($input->getOption('include-form')) {
+            $options['include_form'] = true;
+        }
+        if ($title = $input->getOption('title')) {
+            $options['title'] = $title;
+        }
+
+        $io->text("AI composing page from <info>{$sourceType}</info>...");
+        $result = $iris->pages->composePage($sourceType, $source, $options);
+
+        if ($input->getOption('json')) {
+            $io->writeln(json_encode($result, JSON_PRETTY_PRINT));
+            return Command::SUCCESS;
+        }
+
+        $data = $result['data'] ?? $result;
+        $io->success($result['message'] ?? 'Page composed');
+
+        $pageUrl = $data['page_url'] ?? $data['url'] ?? null;
+        $pageId = $data['page_id'] ?? $data['id'] ?? null;
+        $pageSlug = $data['slug'] ?? null;
+
+        $definitions = [];
+        if ($pageId) {
+            $definitions[] = ['Page ID' => $pageId];
+        }
+        if ($pageSlug) {
+            $definitions[] = ['Slug' => $pageSlug];
+        }
+        if ($pageUrl) {
+            $definitions[] = ['URL' => $pageUrl];
+        } elseif ($pageSlug) {
+            $definitions[] = ['URL' => $this->getPublicUrl($pageSlug)];
+        }
+        if (!empty($definitions)) {
+            $io->definitionList(...$definitions);
+        }
+
+        return Command::SUCCESS;
+    }
+
+    private function thumbnailPage(IRIS $iris, SymfonyStyle $io, InputInterface $input, ?string $slug): int
+    {
+        $pageId = $input->getOption('page-id');
+
+        if (!$slug && !$pageId) {
+            $io->error('Slug or --page-id is required. Usage: pages thumbnail <slug>');
+            return Command::FAILURE;
+        }
+
+        if (!$pageId) {
+            $response = $iris->pages->getBySlug($slug, false);
+            $page = $response['data'] ?? $response;
+            $pageId = $page['id'];
+        }
+
+        $io->text("Generating thumbnail for <info>" . ($slug ?? "Page #{$pageId}") . "</info>...");
+        $result = $iris->pages->generateThumbnail((int) $pageId);
+
+        if ($input->getOption('json')) {
+            $io->writeln(json_encode($result, JSON_PRETTY_PRINT));
+            return Command::SUCCESS;
+        }
+
+        $data = $result['data'] ?? $result;
+        $thumbnailUrl = $data['thumbnail_url'] ?? $data['url'] ?? null;
+
+        $io->success($result['message'] ?? 'Thumbnail generation started');
+        if ($thumbnailUrl) {
+            $io->writeln("Thumbnail: {$thumbnailUrl}");
+        }
+
+        return Command::SUCCESS;
+    }
+
+    private function domainsPage(IRIS $iris, SymfonyStyle $io, InputInterface $input, ?string $slug): int
+    {
+        // slug doubles as sub-action for domains: list, map, verify, remove
+        $subAction = $slug ?? 'list';
+
+        switch ($subAction) {
+            case 'list':
+                $result = $iris->pages->domains('list');
+
+                if ($input->getOption('json')) {
+                    $io->writeln(json_encode($result, JSON_PRETTY_PRINT));
+                    return Command::SUCCESS;
+                }
+
+                $data = $result['data'] ?? $result;
+                $mappings = is_array($data) ? $data : [];
+
+                $io->title('Custom Domain Mappings');
+
+                if (empty($mappings)) {
+                    $io->info('No domain mappings found.');
+                    return Command::SUCCESS;
+                }
+
+                $rows = [];
+                foreach ($mappings as $m) {
+                    $rows[] = [
+                        $m['id'] ?? '-',
+                        $m['domain'] ?? '-',
+                        $m['page_id'] ?? $m['site_id'] ?? '-',
+                        $m['dns_status'] ?? $m['status'] ?? '-',
+                    ];
+                }
+                $io->table(['ID', 'Domain', 'Page/Site ID', 'DNS Status'], $rows);
+                return Command::SUCCESS;
+
+            case 'map':
+                $domain = $input->getOption('domain');
+                $pageId = $input->getOption('page-id');
+
+                if (!$domain) {
+                    $domain = $io->ask('Custom domain');
+                }
+                if (!$domain) {
+                    $io->error('--domain is required.');
+                    return Command::FAILURE;
+                }
+
+                $params = ['domain' => $domain];
+                if ($pageId) {
+                    $params['page_id'] = (int) $pageId;
+                }
+
+                $result = $iris->pages->domains('map', $params);
+
+                if ($input->getOption('json')) {
+                    $io->writeln(json_encode($result, JSON_PRETTY_PRINT));
+                    return Command::SUCCESS;
+                }
+
+                $io->success($result['message'] ?? "Domain '{$domain}' mapped");
+                $io->note([
+                    "Add a CNAME record pointing {$domain} to your origin server.",
+                    "Then verify: ./bin/iris pages domains verify --mapping-id=<id>",
+                ]);
+                return Command::SUCCESS;
+
+            case 'verify':
+                $mappingId = $input->getOption('mapping-id');
+                if (!$mappingId) {
+                    $mappingId = $io->ask('Mapping ID');
+                }
+                if (!$mappingId) {
+                    $io->error('--mapping-id is required.');
+                    return Command::FAILURE;
+                }
+
+                $result = $iris->pages->domains('verify', ['mapping_id' => (int) $mappingId]);
+
+                if ($input->getOption('json')) {
+                    $io->writeln(json_encode($result, JSON_PRETTY_PRINT));
+                    return Command::SUCCESS;
+                }
+
+                $io->success($result['message'] ?? 'DNS verification initiated');
+                return Command::SUCCESS;
+
+            case 'remove':
+                $mappingId = $input->getOption('mapping-id');
+                if (!$mappingId) {
+                    $mappingId = $io->ask('Mapping ID');
+                }
+                if (!$mappingId) {
+                    $io->error('--mapping-id is required.');
+                    return Command::FAILURE;
+                }
+
+                if (!$io->confirm("Remove domain mapping #{$mappingId}?", false)) {
+                    return Command::SUCCESS;
+                }
+
+                $result = $iris->pages->domains('remove', ['mapping_id' => (int) $mappingId]);
+
+                if ($input->getOption('json')) {
+                    $io->writeln(json_encode($result, JSON_PRETTY_PRINT));
+                    return Command::SUCCESS;
+                }
+
+                $io->success($result['message'] ?? "Domain mapping #{$mappingId} removed");
+                return Command::SUCCESS;
+
+            default:
+                $io->error("Unknown domains action: {$subAction}");
+                $io->text('Available: list, map, verify, remove');
+                return Command::FAILURE;
+        }
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────
 
     /**
@@ -1908,6 +2833,8 @@ HELP
      */
     private function getNestedValue(array $array, string $path): mixed
     {
+        // Normalize bracket notation: components[0] → components.0
+        $path = preg_replace('/\[(\d+)\]/', '.$1', $path);
         $keys = explode('.', $path);
         $current = $array;
 
