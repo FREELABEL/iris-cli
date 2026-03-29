@@ -115,4 +115,14 @@ class AtlasOsResource
     {
         return $this->execute('store_document', ['action' => $action] + $params);
     }
+
+    /**
+     * Manage contracts — contractor agreements, vendor terms, compliance.
+     * Actions: create_agreement, update_status, set_compliance, get_contract,
+     *          list_contracts, check_compliance, create_vendor_terms, get_committed_budget
+     */
+    public function contracts(string $action, array $params = []): array
+    {
+        return $this->execute('manage_contracts', ['action' => $action] + $params);
+    }
 }

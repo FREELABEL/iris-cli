@@ -44,6 +44,7 @@ Functions:
   calendar    Schedule and manage social media posts
   research    Web-powered market research with RAG storage
   docs        Store and search documents with vector embedding
+  contracts   Contractor agreements, vendor terms, compliance tracking
 
 Examples:
   atlas inventory list --bloq-id=217
@@ -53,7 +54,7 @@ Examples:
   atlas docs store --title="Meeting Notes" --content="..."
 HELP
             )
-            ->addArgument('function', InputArgument::OPTIONAL, 'Function: inventory, budget, staff, events, calendar, research, docs', 'help')
+            ->addArgument('function', InputArgument::OPTIONAL, 'Function: inventory, budget, staff, events, calendar, research, docs, contracts', 'help')
             ->addArgument('action', InputArgument::OPTIONAL, 'Action (function-specific)', 'list')
             ->addArgument('id', InputArgument::OPTIONAL, 'Item/event/staff/post/task ID')
             // Global options
@@ -86,6 +87,7 @@ HELP
             ->addOption('title', null, InputOption::VALUE_REQUIRED, 'Task/document title')
             ->addOption('due', null, InputOption::VALUE_REQUIRED, 'Due date')
             ->addOption('task-id', null, InputOption::VALUE_REQUIRED, 'Task ID')
+            ->addOption('item-id', null, InputOption::VALUE_REQUIRED, 'BloqItem ID (direct projection link)')
             // Event options
             ->addOption('date', null, InputOption::VALUE_REQUIRED, 'Event date')
             ->addOption('time', null, InputOption::VALUE_REQUIRED, 'Event time')
@@ -116,7 +118,25 @@ HELP
             // Document options
             ->addOption('doc-type', null, InputOption::VALUE_REQUIRED, 'Document type: sop, meeting_notes, policy, plan, research, website_copy, general')
             ->addOption('tags', null, InputOption::VALUE_REQUIRED, 'Tags (comma-separated)')
-            ->addOption('notes', null, InputOption::VALUE_REQUIRED, 'Notes');
+            ->addOption('notes', null, InputOption::VALUE_REQUIRED, 'Notes')
+            // Contract options
+            ->addOption('contract-type', null, InputOption::VALUE_REQUIRED, 'Contract type: 1099, w2, vendor, performance, retainer')
+            ->addOption('start-date', null, InputOption::VALUE_REQUIRED, 'Contract start date (YYYY-MM-DD)')
+            ->addOption('end-date', null, InputOption::VALUE_REQUIRED, 'Contract end date (YYYY-MM-DD)')
+            ->addOption('total-value', null, InputOption::VALUE_REQUIRED, 'Total contract value in dollars')
+            ->addOption('scope-of-work', null, InputOption::VALUE_REQUIRED, 'Scope of work description')
+            ->addOption('payment-terms', null, InputOption::VALUE_REQUIRED, 'Payment terms: net_30, 50_upfront_50_completion, on_delivery')
+            ->addOption('payment-schedule', null, InputOption::VALUE_REQUIRED, 'Payment schedule details')
+            ->addOption('nda-signed', null, InputOption::VALUE_NONE, 'NDA has been signed')
+            ->addOption('w9-on-file', null, InputOption::VALUE_NONE, 'W9 is on file')
+            ->addOption('insurance-verified', null, InputOption::VALUE_NONE, 'Insurance has been verified')
+            ->addOption('insurance-expiry', null, InputOption::VALUE_REQUIRED, 'Insurance expiry date (YYYY-MM-DD)')
+            ->addOption('certifications', null, InputOption::VALUE_REQUIRED, 'Certifications (comma-separated)')
+            ->addOption('background-check', null, InputOption::VALUE_REQUIRED, 'Background check status: pending, cleared, failed')
+            ->addOption('opportunity-id', null, InputOption::VALUE_REQUIRED, 'Link contract to a marketplace opportunity ID')
+            // Deliverable options
+            ->addOption('verdict', null, InputOption::VALUE_REQUIRED, 'Review verdict: approved or revision_needed')
+            ->addOption('reviewer-notes', null, InputOption::VALUE_REQUIRED, 'Review notes for the deliverable');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -134,11 +154,12 @@ HELP
                 [
                     ['inventory', 'Manage inventory items', 'list, create, show, update, delete, search'],
                     ['budget', 'Track expenses & revenue', 'log-expense, log-revenue, summary, list, search, delete'],
-                    ['staff', 'Manage team members', 'list, create, show, update, delete, search, assign, create-task, tasks, complete-task'],
+                    ['staff', 'Manage team members', 'list, create, show, update, delete, search, assign, create-task, tasks, complete-task, submit-deliverable, review-deliverable'],
                     ['events', 'Plan & manage events', 'list, create, show, update, delete, search, add-vendor, vendors, add-ticket, tickets, rsvp, rsvps'],
                     ['calendar', 'Social media scheduling', 'schedule, list, update, publish, delete'],
                     ['research', 'Market research + RAG', 'query, list, search'],
                     ['docs', 'Document management', 'store, list, search, update, delete'],
+                    ['contracts', 'Agreements & compliance', 'create, list, show, update-status, compliance, check, vendor-terms, committed-budget, send'],
                 ]
             );
             $io->text('Usage: iris atlas <function> <action> [options]');
@@ -200,6 +221,9 @@ HELP
                 case 'doc':
                 case 'documents':
                     return $this->handleDocuments($iris, $io, $input, $action, $id, $bloqId, $jsonOutput);
+                case 'contracts':
+                case 'contract':
+                    return $this->handleContracts($iris, $io, $input, $action, $id, $bloqId, $jsonOutput);
                 default:
                     $io->error("Unknown function: {$function}");
                     $io->text('Available: inventory, budget, staff, events, calendar, research, docs');
@@ -379,7 +403,7 @@ HELP
             case 'list':
             case 'ls':
                 $result = $iris->atlasOs->staff('list', ['_bloq_id' => $bloqId]);
-                return $this->outputList($io, $result, $jsonOutput, ['item_id', 'name', 'content.role', 'content.department', 'content.email'], 'Staff');
+                return $this->outputList($io, $result, $jsonOutput, ['staff_id', 'name', 'role', 'department', 'hourly_rate', 'email'], 'Staff');
 
             case 'create':
             case 'add':
@@ -420,7 +444,7 @@ HELP
             case 'find':
                 $query = $input->getOption('query') ?? $io->ask('Search query');
                 $result = $iris->atlasOs->staff('search', ['_bloq_id' => $bloqId, 'query' => $query]);
-                return $this->outputList($io, $result, $jsonOutput, ['item_id', 'name', 'content.role', 'content.department'], "Staff search: {$query}");
+                return $this->outputList($io, $result, $jsonOutput, ['staff_id', 'name', 'role', 'department'], "Staff search: {$query}");
 
             case 'assign':
                 $staffName = $input->getOption('name') ?? $io->ask('Staff name');
@@ -436,13 +460,23 @@ HELP
                 return $this->outputSuccess($io, $result, $jsonOutput, "Assigned '{$staffName}' to event #{$eventId}");
 
             case 'create-task':
-                $staffId = $input->getOption('staff-id') ?? $io->ask('Staff ID');
+                $staffId = $input->getOption('staff-id');
+                $itemId = $input->getOption('item-id');
                 $taskTitle = $input->getOption('title') ?? $io->ask('Task title');
-                if (!$staffId || !$taskTitle) {
-                    $io->error('--staff-id and --title are required');
+                if (!$staffId && !$itemId) {
+                    $staffId = $io->ask('Staff ID (or use --item-id for direct BloqItem link)');
+                }
+                if ((!$staffId && !$itemId) || !$taskTitle) {
+                    $io->error('--staff-id (or --item-id) and --title are required');
                     return Command::FAILURE;
                 }
-                $params = ['_bloq_id' => $bloqId, 'staff_id' => (int) $staffId, 'task_title' => $taskTitle];
+                $params = ['_bloq_id' => $bloqId, 'task_title' => $taskTitle];
+                if ($itemId) {
+                    $params['item_id'] = (int) $itemId;
+                }
+                if ($staffId) {
+                    $params['staff_id'] = (int) $staffId;
+                }
                 if ($desc = $input->getOption('description')) {
                     $params['task_description'] = $desc;
                 }
@@ -454,8 +488,12 @@ HELP
 
             case 'tasks':
                 $staffId = $id ?? $input->getOption('staff-id');
+                $itemId = $input->getOption('item-id');
                 $eventId = $input->getOption('event-id');
                 $params = ['_bloq_id' => $bloqId];
+                if ($itemId) {
+                    $params['item_id'] = (int) $itemId;
+                }
                 if ($staffId) {
                     $params['staff_id'] = (int) $staffId;
                 }
@@ -470,9 +508,34 @@ HELP
                 $result = $iris->atlasOs->staff('complete_task', ['_bloq_id' => $bloqId, 'task_id' => (int) $taskId]);
                 return $this->outputSuccess($io, $result, $jsonOutput, "Task #{$taskId} completed");
 
+            case 'submit-deliverable':
+            case 'submit':
+                $taskId = $input->getOption('task-id') ?? $id ?? $io->ask('Task ID to submit');
+                if (!$taskId) {
+                    $io->error('--task-id is required');
+                    return Command::FAILURE;
+                }
+                $result = $iris->atlasOs->staff('submit_deliverable', ['_bloq_id' => $bloqId, 'task_id' => (int) $taskId]);
+                return $this->outputSuccess($io, $result, $jsonOutput, "Deliverable submitted for task #{$taskId}");
+
+            case 'review-deliverable':
+            case 'review':
+                $taskId = $input->getOption('task-id') ?? $id ?? $io->ask('Task ID to review');
+                $verdict = $input->getOption('verdict') ?? $io->ask('Verdict (approved/revision_needed)');
+                if (!$taskId || !$verdict) {
+                    $io->error('--task-id and --verdict are required');
+                    return Command::FAILURE;
+                }
+                $params = ['_bloq_id' => $bloqId, 'task_id' => (int) $taskId, 'verdict' => $verdict];
+                if ($input->getOption('reviewer-notes')) {
+                    $params['reviewer_notes'] = $input->getOption('reviewer-notes');
+                }
+                $result = $iris->atlasOs->staff('review_deliverable', $params);
+                return $this->outputSuccess($io, $result, $jsonOutput, "Deliverable for task #{$taskId}: {$verdict}");
+
             default:
                 $io->error("Unknown staff action: {$action}");
-                $io->text('Available: list, create, show, update, delete, search, assign, create-task, tasks, complete-task');
+                $io->text('Available: list, create, show, update, delete, search, assign, create-task, tasks, complete-task, submit-deliverable, review-deliverable');
                 return Command::FAILURE;
         }
     }
@@ -794,6 +857,176 @@ HELP
 
     // ========================================================================
     // OUTPUT HELPERS
+    // ========================================================================
+
+    // ========================================================================
+    // CONTRACTS
+    // ========================================================================
+
+    private function handleContracts(IRIS $iris, SymfonyStyle $io, InputInterface $input, string $action, ?string $id, int $bloqId, bool $jsonOutput): int
+    {
+        switch ($action) {
+            case 'list':
+            case 'ls':
+                $result = $iris->atlasOs->contracts('list_contracts', ['_bloq_id' => $bloqId]);
+                $data = $result['data'] ?? $result;
+                if ($jsonOutput) {
+                    $io->writeln(json_encode($data, JSON_PRETTY_PRINT));
+                    return Command::SUCCESS;
+                }
+                $contracts = $data['contracts'] ?? [];
+                $io->title('Contracts (' . count($contracts) . ')');
+                if (empty($contracts)) {
+                    $io->info('No contracts found.');
+                    return Command::SUCCESS;
+                }
+                $rows = [];
+                foreach ($contracts as $c) {
+                    $rows[] = [
+                        $c['staff_id'] ?? '-',
+                        $c['name'] ?? '-',
+                        $c['role'] ?? '-',
+                        $c['contract_type'] ?? '-',
+                        $c['contract_status'] ?? '-',
+                        isset($c['contract_value']) ? '$' . number_format($c['contract_value']) : '-',
+                        ($c['start_date'] ?? '-') . ' → ' . ($c['end_date'] ?? '-'),
+                        ($c['has_compliance'] ?? false) ? 'Yes' : 'No',
+                    ];
+                }
+                $io->table(['Staff ID', 'Name', 'Role', 'Type', 'Status', 'Value', 'Period', 'Compliant'], $rows);
+                return Command::SUCCESS;
+
+            case 'create':
+            case 'add':
+                $staffId = $id ?? $input->getOption('staff-id') ?? $io->ask('Staff member ID');
+                if (!$staffId) {
+                    $io->error('Staff ID is required. Use --staff-id=N or pass as argument.');
+                    return Command::FAILURE;
+                }
+                $params = ['_bloq_id' => $bloqId, 'staff_id' => (int) $staffId];
+                $this->addOptional($params, $input, [
+                    'contract-type' => 'contract_type',
+                    'start-date' => 'start_date',
+                    'end-date' => 'end_date',
+                    'total-value' => 'total_value',
+                    'scope-of-work' => 'scope_of_work',
+                    'payment-terms' => 'payment_terms',
+                    'payment-schedule' => 'payment_schedule',
+                    'event-id' => 'event_id',
+                    'opportunity-id' => 'opportunity_id',
+                ]);
+                if ($input->getOption('nda-signed')) {
+                    $params['nda_signed'] = true;
+                }
+                if ($input->getOption('w9-on-file')) {
+                    $params['w9_on_file'] = true;
+                }
+                $result = $iris->atlasOs->contracts('create_agreement', $params);
+                return $this->outputSuccess($io, $result, $jsonOutput, "Contract created for staff #{$staffId}");
+
+            case 'show':
+            case 'get':
+                $staffId = $id ?? $input->getOption('staff-id') ?? $io->ask('Staff member ID');
+                $result = $iris->atlasOs->contracts('get_contract', ['_bloq_id' => $bloqId, 'staff_id' => (int) $staffId]);
+                return $this->outputDetail($io, $result, $jsonOutput);
+
+            case 'update-status':
+                $staffId = $id ?? $input->getOption('staff-id') ?? $io->ask('Staff member ID');
+                $status = $input->getOption('status') ?? $io->ask('Status (draft, pending_signature, active, completed, terminated)');
+                if (!$staffId || !$status) {
+                    $io->error('--staff-id and --status are required');
+                    return Command::FAILURE;
+                }
+                $result = $iris->atlasOs->contracts('update_status', ['_bloq_id' => $bloqId, 'staff_id' => (int) $staffId, 'status' => $status]);
+                return $this->outputSuccess($io, $result, $jsonOutput, "Contract for staff #{$staffId} updated to {$status}");
+
+            case 'compliance':
+            case 'set-compliance':
+                $staffId = $id ?? $input->getOption('staff-id') ?? $io->ask('Staff member ID');
+                if (!$staffId) {
+                    $io->error('--staff-id is required');
+                    return Command::FAILURE;
+                }
+                $params = ['_bloq_id' => $bloqId, 'staff_id' => (int) $staffId];
+                if ($input->getOption('insurance-verified')) {
+                    $params['insurance_verified'] = true;
+                }
+                $this->addOptional($params, $input, [
+                    'insurance-expiry' => 'insurance_expiry',
+                    'certifications' => 'certifications',
+                    'background-check' => 'background_check',
+                ]);
+                if ($input->getOption('nda-signed')) {
+                    $params['nda_signed'] = true;
+                }
+                if ($input->getOption('w9-on-file')) {
+                    $params['w9_on_file'] = true;
+                }
+                $result = $iris->atlasOs->contracts('set_compliance', $params);
+                return $this->outputSuccess($io, $result, $jsonOutput, "Compliance updated for staff #{$staffId}");
+
+            case 'check':
+            case 'check-compliance':
+                $result = $iris->atlasOs->contracts('check_compliance', ['_bloq_id' => $bloqId]);
+                return $this->outputResult($io, $result, $jsonOutput, 'Compliance Check');
+
+            case 'vendor-terms':
+                $supplier = $input->getOption('supplier') ?? $io->ask('Supplier name');
+                if (!$supplier) {
+                    $io->error('--supplier is required');
+                    return Command::FAILURE;
+                }
+                $params = ['_bloq_id' => $bloqId, 'supplier' => $supplier];
+                $this->addOptional($params, $input, [
+                    'payment-terms' => 'payment_terms',
+                    'total-value' => 'total_value',
+                ]);
+                $result = $iris->atlasOs->contracts('create_vendor_terms', $params);
+                return $this->outputSuccess($io, $result, $jsonOutput, "Vendor terms created for '{$supplier}'");
+
+            case 'committed-budget':
+            case 'budget':
+                $result = $iris->atlasOs->contracts('get_committed_budget', ['_bloq_id' => $bloqId]);
+                return $this->outputResult($io, $result, $jsonOutput, 'Committed Budget');
+
+            case 'send':
+            case 'generate-url':
+                $staffId = $id ?? $input->getOption('staff-id') ?? $io->ask('Staff member ID');
+                if (!$staffId) {
+                    $io->error('Staff ID is required.');
+                    return Command::FAILURE;
+                }
+                $result = $iris->atlasOs->contracts('generate_signing_url', [
+                    '_bloq_id' => $bloqId,
+                    'staff_id' => (int) $staffId,
+                ]);
+                $data = $result['data'] ?? $result;
+                if (isset($data['error'])) {
+                    $io->error($data['error']);
+                    return Command::FAILURE;
+                }
+                if ($jsonOutput) {
+                    $io->writeln(json_encode($data, JSON_PRETTY_PRINT));
+                    return Command::SUCCESS;
+                }
+                $contractorName = $data['contractor_name'] ?? 'staff #' . $staffId;
+                $signingUrl = $data['signing_url'] ?? 'N/A';
+                $io->success("Signing URL generated for '{$contractorName}'");
+                $io->newLine();
+                $io->text($signingUrl);
+                $io->newLine();
+                $io->note('Share this URL with the contractor. No login required. Status: pending_signature');
+                return Command::SUCCESS;
+
+            default:
+                $io->error("Unknown contracts action: {$action}");
+                $io->text('Available: list, create, show, update-status, compliance, check, vendor-terms, committed-budget, send');
+                return Command::FAILURE;
+        }
+    }
+
+    // ========================================================================
+    // HELPERS
     // ========================================================================
 
     /**
