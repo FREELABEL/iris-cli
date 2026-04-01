@@ -65,6 +65,7 @@ Pull/Push (local file workflow):
   pages pull <slug>                                  Download page JSON to ./pages/<slug>.json
   pages push <slug>                                  Upload ./pages/<slug>.json to API
   pages diff <slug>                                  Compare local file vs remote
+  pages sync <slug>                                  Pull remote, diff, and push local changes
 
 Component Management:
   pages components <slug>                            List components
@@ -260,6 +261,9 @@ HELP
 
                 case 'diff':
                     return $this->diffPage($iris, $io, $input, $slug);
+
+                case 'sync':
+                    return $this->syncPage($iris, $io, $input, $slug);
 
                 case 'publish':
                     return $this->publishPage($iris, $io, $slug);
@@ -608,6 +612,115 @@ HELP
         }
 
         $io->note("To apply local changes: ./bin/iris pages push {$slug}");
+
+        return Command::SUCCESS;
+    }
+
+    private function syncPage(IRIS $iris, SymfonyStyle $io, InputInterface $input, ?string $slug): int
+    {
+        if (!$slug) {
+            $io->error('Slug is required. Usage: pages sync <slug>');
+            return Command::FAILURE;
+        }
+
+        $dir = $input->getOption('dir');
+        $filePath = rtrim($dir, '/') . "/{$slug}.json";
+        $hasLocal = file_exists($filePath);
+
+        // Step 1: Fetch remote page
+        $io->section("Syncing '{$slug}'");
+
+        try {
+            $response = $iris->pages->getBySlug($slug, true);
+            $page = $response['data'] ?? $response;
+        } catch (\Exception $e) {
+            $io->error("Page '{$slug}' not found on remote: " . $e->getMessage());
+            return Command::FAILURE;
+        }
+
+        $remoteContent = $page['json_content'] ?? [];
+        $componentCount = count($remoteContent['components'] ?? []);
+        $io->text("Remote: Page ID {$page['id']} — \"{$page['title']}\" ({$componentCount} components, v{$page['version']})");
+
+        if (!$hasLocal) {
+            // No local file — just pull
+            if (!is_dir($dir)) {
+                mkdir($dir, 0755, true);
+            }
+
+            $export = [
+                'id' => $page['id'],
+                'slug' => $page['slug'],
+                'title' => $page['title'],
+                'seo_title' => $page['seo_title'] ?? null,
+                'seo_description' => $page['seo_description'] ?? null,
+                'og_image' => $page['og_image'] ?? null,
+                'status' => $page['status'],
+                'owner_type' => $page['owner_type'] ?? 'system',
+                'owner_id' => $page['owner_id'] ?? null,
+                'json_content' => $remoteContent,
+            ];
+
+            file_put_contents($filePath, json_encode($export, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+            $io->success("Pulled '{$slug}' -> {$filePath} ({$componentCount} components)");
+            return Command::SUCCESS;
+        }
+
+        // Step 2: Load local and compare
+        $localJson = json_decode(file_get_contents($filePath), true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $io->error("Invalid JSON in {$filePath}: " . json_last_error_msg());
+            return Command::FAILURE;
+        }
+
+        $localContent = $localJson['json_content'] ?? [];
+        $localEncoded = json_encode($localContent, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        $remoteEncoded = json_encode($remoteContent, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
+        if ($localEncoded === $remoteEncoded) {
+            $io->success("Already in sync — no differences between local and remote.");
+            return Command::SUCCESS;
+        }
+
+        // Show summary of differences
+        $localComponents = $localContent['components'] ?? [];
+        $remoteComponents = $remoteContent['components'] ?? [];
+        $io->text("Local:  {$filePath} (" . count($localComponents) . " components)");
+        $io->text("Remote: " . count($remoteComponents) . " components");
+
+        $changedCount = 0;
+        $maxCount = max(count($localComponents), count($remoteComponents));
+        for ($i = 0; $i < $maxCount; $i++) {
+            $local = $localComponents[$i] ?? null;
+            $remote = $remoteComponents[$i] ?? null;
+            if (json_encode($local) !== json_encode($remote)) {
+                $changedCount++;
+            }
+        }
+        $io->text("<fg=yellow>{$changedCount} component(s) differ</>");
+
+        // Step 3: Push local changes to remote
+        $updateData = [];
+        if (isset($localJson['title'])) {
+            $updateData['title'] = $localJson['title'];
+        }
+        if (isset($localJson['seo_title'])) {
+            $updateData['seo_title'] = $localJson['seo_title'];
+        }
+        if (isset($localJson['seo_description'])) {
+            $updateData['seo_description'] = $localJson['seo_description'];
+        }
+        if (isset($localJson['og_image'])) {
+            $updateData['og_image'] = $localJson['og_image'];
+        }
+        if (isset($localJson['json_content'])) {
+            $updateData['json_content'] = $localJson['json_content'];
+        }
+
+        $result = $iris->pages->update($page['id'], $updateData);
+
+        $io->success("Synced '{$slug}' — pushed " . count($localComponents) . " components to remote (new version created)");
+        $io->note("Use 'pages versions {$slug}' to see history, 'pages rollback {$slug}' to undo.");
 
         return Command::SUCCESS;
     }
@@ -1360,8 +1473,8 @@ HELP
             'VideoBlock' => ['videoUrl', 'title', 'description', 'themeMode'],
 
             // Navigation
-            'SiteNavigation' => ['logo', 'links', 'ctaText', 'ctaUrl', 'ctaColor', 'ctaButton', 'ctaFilled', 'themeMode', 'transparent'],
-            'SiteFooter' => ['columns', 'copyright', 'socialLinks', 'logo', 'themeMode'],
+            'SiteNavigation' => ['logo', 'links', 'ctaButton', 'ctaFilled', 'ctaColor', 'accentColor', 'navLayout', 'themeMode', 'transparent'],
+            'SiteFooter' => ['logo', 'columns', 'newsletter', 'copyright', 'socialLinks', 'accentColor', 'themeMode'],
 
             // Grids & features
             'FeatureGrid' => ['heading', 'subheading', 'features', 'columns', 'themeMode'],
@@ -1402,6 +1515,28 @@ HELP
             'ImageBlock' => ['src', 'alt', 'title', 'caption', 'aspectRatio', 'objectFit', 'maxWidth', 'alignment', 'rounded', 'shadow', 'themeMode'],
             'ImageGallery' => ['images', 'columns', 'gap', 'rounded', 'aspectRatio', 'title', 'subtitle', 'maxWidth', 'themeMode'],
             'LogoStrip' => ['title', 'subtitle', 'labelText', 'logos', 'logoSize', 'grayscale', 'borderless', 'themeMode'],
+
+            // Preline-Inspired Components (Batch 1)
+            'TimelineCarousel' => ['heading', 'subheading', 'items', 'accentColor', 'themeMode'],
+            'ImageBanner' => ['src', 'alt', 'height', 'themeMode'],
+            'BlogGrid' => ['heading', 'subheading', 'items', 'columns', 'accentColor', 'themeMode'],
+            'ScatteredImageHero' => ['heading', 'subheading', 'images', 'accentColor', 'themeMode'],
+            'ServiceListing' => ['heading', 'subheading', 'services', 'accentColor', 'themeMode'],
+            'PricingRows' => ['heading', 'subheading', 'rows', 'accentColor', 'themeMode'],
+
+            // Preline-Inspired Components (Batch 2)
+            'TestimonialsSection' => ['heading', 'subheading', 'testimonials', 'layout', 'columns', 'accentColor', 'themeMode'],
+            'TeamSection' => ['heading', 'subheading', 'members', 'layout', 'columns', 'hiringLink', 'hiringLabel', 'accentColor', 'themeMode'],
+            'ContactSection' => ['heading', 'subheading', 'contactInfo', 'showForm', 'formAction', 'formFields', 'submitLabel', 'layout', 'accentColor', 'themeMode'],
+            'ComparisonMatrix' => ['heading', 'subheading', 'plans', 'features', 'showToggle', 'accentColor', 'themeMode'],
+            'LogoMarquee' => ['heading', 'logos', 'speed', 'pauseOnHover', 'logoWidth', 'accentColor', 'themeMode'],
+            'MapSection' => ['heading', 'subheading', 'locations', 'mapEmbedUrl', 'layout', 'columns', 'accentColor', 'themeMode'],
+
+            // Preline-Inspired Components (Batch 3)
+            'CareersListing' => ['heading', 'subheading', 'jobs', 'showFilters', 'accentColor', 'themeMode'],
+            'FeatureShowcase' => ['heading', 'subheading', 'features', 'accentColor', 'themeMode'],
+            'ClientGrid' => ['heading', 'subheading', 'clients', 'columns', 'accentColor', 'themeMode'],
+            'AnnouncementBanner' => ['text', 'linkText', 'linkUrl', 'dismissible', 'backgroundColor', 'accentColor', 'themeMode'],
 
             // Charts & Data Visualization
             'ApexChart' => ['title', 'subtitle', 'chartType', 'series', 'categories', 'labels', 'height', 'stacked', 'colors', 'summaryItems', 'showToolbar', 'showGrid', 'showLegend', 'borderRadius', 'columnWidth', 'themeMode'],
@@ -2185,11 +2320,62 @@ HELP
                 $warnings[] = "[{$idx}] {$type}: missing 'id' field";
             }
 
-            // Type-specific checks
-            if ($type === 'SiteNavigation' && isset($props['logo'])) {
-                $logo = $props['logo'];
-                if (is_array($logo) && empty($logo['imageUrl']) && empty($logo['image'])) {
-                    $warnings[] = "[{$idx}] SiteNavigation: logo object has no imageUrl or image";
+            // Type-specific checks: object-shape props
+            if ($type === 'SiteNavigation') {
+                if (isset($props['logo'])) {
+                    if (!is_array($props['logo'])) {
+                        $errors[] = "[{$idx}] SiteNavigation: 'logo' must be an object {text, imageUrl?, url?}, got " . gettype($props['logo']);
+                    } elseif (empty($props['logo']['text']) && empty($props['logo']['imageUrl'])) {
+                        $warnings[] = "[{$idx}] SiteNavigation: logo has neither 'text' nor 'imageUrl'";
+                    }
+                } else {
+                    $errors[] = "[{$idx}] SiteNavigation: missing required 'logo' prop (object with text/imageUrl)";
+                }
+
+                if (isset($props['ctaButton']) && !is_array($props['ctaButton'])) {
+                    $errors[] = "[{$idx}] SiteNavigation: 'ctaButton' must be an object {text, url}, got " . gettype($props['ctaButton']);
+                }
+
+                // Catch common mistakes: flat ctaText/ctaUrl instead of ctaButton
+                if (isset($props['ctaText']) || isset($props['ctaUrl'])) {
+                    $errors[] = "[{$idx}] SiteNavigation: 'ctaText'/'ctaUrl' are not valid — use ctaButton: {text, url} instead";
+                }
+
+                // Catch common mistake: flat logoText instead of logo object
+                if (isset($props['logoText'])) {
+                    $errors[] = "[{$idx}] SiteNavigation: 'logoText' is not valid — use logo: {text: \"...\"} instead";
+                }
+            }
+
+            if ($type === 'SiteFooter') {
+                if (isset($props['logo']) && !is_array($props['logo'])) {
+                    $errors[] = "[{$idx}] SiteFooter: 'logo' must be an object {text, tagline?, imageUrl?}, got " . gettype($props['logo']);
+                }
+                if (!isset($props['logo'])) {
+                    $errors[] = "[{$idx}] SiteFooter: missing required 'logo' prop";
+                }
+                if (!isset($props['copyright'])) {
+                    $warnings[] = "[{$idx}] SiteFooter: missing 'copyright' prop";
+                }
+
+                // Catch common mistakes: flat brandName/tagline instead of logo object
+                if (isset($props['brandName']) || isset($props['tagline'])) {
+                    $errors[] = "[{$idx}] SiteFooter: 'brandName'/'tagline' are not valid — use logo: {text, tagline} instead";
+                }
+            }
+
+            // Catch Hero prop name mistakes
+            if ($type === 'Hero') {
+                $heroMistakes = [];
+                if (isset($props['heading'])) $heroMistakes[] = "'heading' → use 'title'";
+                if (isset($props['subheading'])) $heroMistakes[] = "'subheading' → use 'subtitle'";
+                if (isset($props['label'])) $heroMistakes[] = "'label' → use 'labelText'";
+                if (isset($props['ctaText'])) $heroMistakes[] = "'ctaText' → use 'primaryButtonText'";
+                if (isset($props['ctaUrl'])) $heroMistakes[] = "'ctaUrl' → use 'primaryButtonUrl'";
+                if (isset($props['backgroundType'])) $heroMistakes[] = "'backgroundType' → use 'backgroundGradient' (Tailwind classes)";
+                if (isset($props['gradientFrom']) || isset($props['gradientTo'])) $heroMistakes[] = "'gradientFrom'/'gradientTo' → use 'backgroundGradient: \"from-X to-Y\"'";
+                if (!empty($heroMistakes)) {
+                    $errors[] = "[{$idx}] Hero: wrong prop names — " . implode('; ', $heroMistakes);
                 }
             }
 
@@ -2211,6 +2397,11 @@ HELP
                 'StatsCounter' => 'stats', 'PricingPlans' => 'plans', 'BenefitsSection' => 'benefits',
                 'GettingStartedSteps' => 'steps', 'ComparisonCards' => 'cards', 'PortfolioGrid' => 'items',
                 'AgentExamples' => 'examples', 'SiteNavigation' => 'links', 'SiteFooter' => 'columns',
+                'TestimonialsSection' => 'testimonials', 'TeamSection' => 'members',
+                'ContactSection' => 'contactInfo', 'ComparisonMatrix' => 'plans',
+                'LogoMarquee' => 'logos', 'MapSection' => 'locations',
+                'TimelineCarousel' => 'items', 'BlogGrid' => 'items', 'ServiceListing' => 'services',
+                'CareersListing' => 'jobs', 'FeatureShowcase' => 'features', 'ClientGrid' => 'clients',
             ];
 
             if (isset($arrayProps[$type])) {
