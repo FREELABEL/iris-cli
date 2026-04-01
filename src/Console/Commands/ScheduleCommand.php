@@ -32,7 +32,8 @@ class ScheduleCommand extends Command
     {
         $this
             ->setName('schedule')
-            ->setDescription('Manage agent scheduled jobs and execution history')
+            ->setAliases(['heartbeat'])
+            ->setDescription('Manage agent scheduled jobs, heartbeats, and execution history')
             ->setHelp('Commands: status, list, create, run, reset, reset-all, history, agent-history, all-history, execution, sync, heartbeat, recent')
             ->addArgument('action', InputArgument::REQUIRED, 'Action: status|list|create|run|reset|reset-all|history|agent-history|all-history|execution|sync|heartbeat|recent')
             ->addArgument('id', InputArgument::OPTIONAL, 'Job ID or Agent ID (depending on action)')
