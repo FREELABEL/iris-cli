@@ -29,6 +29,7 @@ class MonitorCommand extends Command
     {
         $this
             ->setName('monitor')
+            ->setAliases(['health'])
             ->setDescription('Platform health monitoring and heartbeat diagnostics')
             ->setHelp('Commands: overview, agent, loops, kill')
             ->addArgument('action', InputArgument::REQUIRED, 'Action: overview|agent|loops|kill')
