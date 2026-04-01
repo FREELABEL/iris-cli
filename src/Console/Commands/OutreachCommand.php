@@ -22,6 +22,8 @@ use IRIS\SDK\Config;
  *   ./bin/iris outreach:strategy list <bloq_id>                         # List all strategies
  *   ./bin/iris outreach:strategy show <bloq_id> <id>                    # Show strategy + steps
  *   ./bin/iris outreach:strategy create <bloq_id>                       # Interactive creation
+ *   ./bin/iris outreach:strategy create <bloq_id> --from-json=file.json # Create from JSON file
+ *   ./bin/iris outreach:strategy update <bloq_id> <id>                  # Edit existing strategy
  *   ./bin/iris outreach:strategy apply <bloq_id> <id> <lead_id>         # Apply to a lead
  *   ./bin/iris outreach:strategy duplicate <bloq_id> <id>               # Clone strategy
  *   ./bin/iris outreach:strategy delete <bloq_id> <id>                  # Delete strategy
@@ -77,7 +79,8 @@ class OutreachCommand extends Command
     {
         $this
             ->setName('outreach:strategy')
-            ->setDescription('Manage outreach strategy templates for bloqs')
+            ->setAliases(['reachr:strategy'])
+            ->setDescription('Manage outreach strategy templates (Reachr)')
             ->setHelp(<<<'HELP'
 Manage multi-step outreach strategy templates attached to bloqs.
 
@@ -85,6 +88,8 @@ Usage:
   outreach:strategy list <bloq_id>                           List all strategies
   outreach:strategy show <bloq_id> <id>                      Show strategy details + steps
   outreach:strategy create <bloq_id>                         Interactive strategy builder
+  outreach:strategy create <bloq_id> --from-json=file.json   Create from JSON file (non-interactive)
+  outreach:strategy update <bloq_id> <id>                    Edit existing strategy
   outreach:strategy apply <bloq_id> <id> <lead_id>           Apply strategy to a lead
   outreach:strategy duplicate <bloq_id> <id>                 Duplicate a strategy
   outreach:strategy delete <bloq_id> <id>                    Delete a strategy
@@ -95,6 +100,8 @@ Examples:
   outreach:strategy list 40 --category=cold_outreach
   outreach:strategy show 40 5
   outreach:strategy create 40 --name="Instagram-First Outreach" --category=cold_outreach
+  outreach:strategy create 40 --from-json=./strategies/ai-builders.json
+  outreach:strategy update 40 5 --name="Updated Name"
   outreach:strategy apply 40 5 412
   outreach:strategy apply 40 5 412 --clear-existing
   outreach:strategy duplicate 40 5 --new-name="Instagram V2"
@@ -117,7 +124,7 @@ Related Commands:
   outreach:campaign list <bloq_id>                           Manage campaigns (coming soon)
 HELP
             )
-            ->addArgument('action', InputArgument::OPTIONAL, 'Action: list|show|create|apply|duplicate|delete|metadata', 'list')
+            ->addArgument('action', InputArgument::OPTIONAL, 'Action: list|show|create|update|apply|duplicate|delete|metadata', 'list')
             ->addArgument('bloq_id', InputArgument::OPTIONAL, 'Bloq ID')
             ->addArgument('id', InputArgument::OPTIONAL, 'Strategy template ID')
             ->addArgument('lead_id', InputArgument::OPTIONAL, 'Lead ID (for apply)')
@@ -134,7 +141,13 @@ HELP
             // Duplicate option
             ->addOption('new-name', null, InputOption::VALUE_REQUIRED, 'New name for duplication')
             // Apply option
-            ->addOption('clear-existing', null, InputOption::VALUE_NONE, 'Clear existing lead steps when applying');
+            ->addOption('clear-existing', null, InputOption::VALUE_NONE, 'Clear existing lead steps when applying')
+            // JSON import option
+            ->addOption('from-json', null, InputOption::VALUE_REQUIRED, 'Create strategy from JSON file (non-interactive)')
+            // Operational defaults
+            ->addOption('default-ig-account', null, InputOption::VALUE_REQUIRED, 'Default Instagram account')
+            ->addOption('default-leadgen-mode', null, InputOption::VALUE_REQUIRED, 'Default leadgen mode: followers|comments|profiles')
+            ->addOption('default-solution', null, InputOption::VALUE_REQUIRED, 'Default solution key (e.g. ai-courses, creators, dj)');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -201,6 +214,9 @@ HELP
                 case 'create':
                     return $this->createStrategy($iris, $io, $input, (int) $bloqId);
 
+                case 'update':
+                    return $this->updateStrategy($iris, $io, $input, (int) $bloqId);
+
                 case 'apply':
                     return $this->applyStrategy($iris, $io, $input, (int) $bloqId);
 
@@ -214,7 +230,7 @@ HELP
                     return $this->showMetadata($iris, $io, $input, (int) $bloqId);
 
                 default:
-                    $io->error("Unknown action: {$action}. Use: list, show, create, apply, duplicate, delete, metadata");
+                    $io->error("Unknown action: {$action}. Use: list, show, create, update, apply, duplicate, delete, metadata");
                     return Command::FAILURE;
             }
         } catch (\Exception $e) {
@@ -264,11 +280,13 @@ HELP
                 $stepCount,
                 ($template['is_default'] ?? false) ? '<fg=green>Yes</>' : 'No',
                 $template['usage_count'] ?? 0,
+                $template['default_ig_account'] ?? '-',
+                $template['default_solution'] ?? '-',
             ];
         }
 
         $io->table(
-            ['ID', 'Code', 'Name', 'Category', 'Steps', 'Default', 'Used'],
+            ['ID', 'Code', 'Name', 'Category', 'Steps', 'Default', 'Used', 'IG Account', 'Solution'],
             $rows
         );
 
@@ -305,7 +323,10 @@ HELP
             ['Icon' => $iconLabel],
             ['Default' => ($template['is_default'] ?? false) ? 'Yes' : 'No'],
             ['Usage Count' => $template['usage_count'] ?? 0],
-            ['Description' => $template['description'] ?? '(none)']
+            ['Description' => $template['description'] ?? '(none)'],
+            ['IG Account' => $template['default_ig_account'] ?? '(none)'],
+            ['Leadgen Mode' => $template['default_leadgen_mode'] ?? '(none)'],
+            ['Solution' => $template['default_solution'] ?? '(none)']
         );
 
         // Show steps
@@ -352,6 +373,12 @@ HELP
 
     private function createStrategy(IRIS $iris, SymfonyStyle $io, InputInterface $input, int $bloqId): int
     {
+        // Check for --from-json (non-interactive bulk creation)
+        $jsonFile = $input->getOption('from-json');
+        if ($jsonFile) {
+            return $this->createFromJson($iris, $io, $bloqId, $jsonFile);
+        }
+
         $io->title('Create Outreach Strategy');
         $helper = $this->getHelper('question');
 
@@ -429,7 +456,12 @@ HELP
             return Command::FAILURE;
         }
 
-        // 6. POST to API
+        // 6. Operational defaults
+        $defaultIgAccount = $input->getOption('default-ig-account');
+        $defaultLeadgenMode = $input->getOption('default-leadgen-mode');
+        $defaultSolution = $input->getOption('default-solution');
+
+        // 7. POST to API
         $http = $iris->getHttpClient();
         $payload = [
             'name'        => $name,
@@ -439,6 +471,16 @@ HELP
             'is_default'  => false,
             'steps'       => $steps,
         ];
+
+        if ($defaultIgAccount) {
+            $payload['default_ig_account'] = $defaultIgAccount;
+        }
+        if ($defaultLeadgenMode) {
+            $payload['default_leadgen_mode'] = $defaultLeadgenMode;
+        }
+        if ($defaultSolution) {
+            $payload['default_solution'] = $defaultSolution;
+        }
 
         $response = $http->post(self::BASE_PATH . "/{$bloqId}/outreach-strategy-templates", $payload);
         $template = $response['data'] ?? $response;
@@ -644,6 +686,247 @@ HELP
                 }
             }
         }
+
+        return Command::SUCCESS;
+    }
+
+    // ─── Create from JSON ─────────────────────────────────────────────────
+
+    private function createFromJson(IRIS $iris, SymfonyStyle $io, int $bloqId, string $jsonFile): int
+    {
+        if (!file_exists($jsonFile)) {
+            $io->error("File not found: {$jsonFile}");
+            return Command::FAILURE;
+        }
+
+        $json = file_get_contents($jsonFile);
+        $payload = json_decode($json, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $io->error("Invalid JSON: " . json_last_error_msg());
+            return Command::FAILURE;
+        }
+
+        // Validate required fields
+        if (empty($payload['name'])) {
+            $io->error('JSON must contain a "name" field.');
+            return Command::FAILURE;
+        }
+        if (empty($payload['steps']) || !is_array($payload['steps'])) {
+            $io->error('JSON must contain a "steps" array with at least one step.');
+            return Command::FAILURE;
+        }
+
+        // Validate each step
+        foreach ($payload['steps'] as $i => $step) {
+            if (empty($step['title'])) {
+                $io->error("Step " . ($i + 1) . " is missing a \"title\" field.");
+                return Command::FAILURE;
+            }
+            if (empty($step['type'])) {
+                $io->error("Step " . ($i + 1) . " is missing a \"type\" field.");
+                return Command::FAILURE;
+            }
+        }
+
+        $io->title('Create Strategy from JSON');
+        $io->text("File: {$jsonFile}");
+        $io->text("Name: {$payload['name']}");
+        $io->text("Steps: " . count($payload['steps']));
+        $io->newLine();
+
+        // Show step preview
+        foreach ($payload['steps'] as $i => $step) {
+            $channelLabel = self::CHANNELS[$step['type'] ?? ''] ?? ($step['type'] ?? '-');
+            $delay = ($step['delay_hours'] ?? 0) > 0 ? " (+{$step['delay_hours']}h)" : '';
+            $io->text("  <fg=cyan>Step " . ($i + 1) . ":</> {$step['title']} <fg=gray>[{$channelLabel}]{$delay}</>");
+        }
+        $io->newLine();
+
+        $http = $iris->getHttpClient();
+        $response = $http->post(self::BASE_PATH . "/{$bloqId}/outreach-strategy-templates", $payload);
+        $template = $response['data'] ?? $response;
+
+        $io->success("Strategy created from JSON!");
+        $io->definitionList(
+            ['ID' => $template['id'] ?? '?'],
+            ['Short Code' => $template['short_code'] ?? '-'],
+            ['Name' => $template['name'] ?? $payload['name']],
+            ['Steps' => count($payload['steps'])]
+        );
+
+        $templateId = $template['id'] ?? '?';
+        $io->note([
+            "View: php bin/iris outreach:strategy show {$bloqId} {$templateId}",
+            "Apply to a lead: php bin/iris outreach:strategy apply {$bloqId} {$templateId} <lead_id>",
+        ]);
+
+        return Command::SUCCESS;
+    }
+
+    // ─── Update ───────────────────────────────────────────────────────────
+
+    private function updateStrategy(IRIS $iris, SymfonyStyle $io, InputInterface $input, int $bloqId): int
+    {
+        $id = $input->getArgument('id');
+        if (!$id) {
+            $io->error('Strategy ID is required. Usage: outreach:strategy update <bloq_id> <id>');
+            return Command::FAILURE;
+        }
+
+        // Check for --from-json (replace entire strategy from file)
+        $jsonFile = $input->getOption('from-json');
+        if ($jsonFile) {
+            if (!file_exists($jsonFile)) {
+                $io->error("File not found: {$jsonFile}");
+                return Command::FAILURE;
+            }
+
+            $json = file_get_contents($jsonFile);
+            $payload = json_decode($json, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                $io->error("Invalid JSON: " . json_last_error_msg());
+                return Command::FAILURE;
+            }
+
+            $http = $iris->getHttpClient();
+            $response = $http->put(self::BASE_PATH . "/{$bloqId}/outreach-strategy-templates/{$id}", $payload);
+            $template = $response['data'] ?? $response;
+
+            $io->success("Strategy #{$id} updated from JSON!");
+            return Command::SUCCESS;
+        }
+
+        // Fetch existing strategy
+        $http = $iris->getHttpClient();
+        $response = $http->get(self::BASE_PATH . "/{$bloqId}/outreach-strategy-templates/{$id}");
+        $existing = $response['data'] ?? $response;
+
+        $io->title("Update Strategy: {$existing['name']}");
+        $helper = $this->getHelper('question');
+
+        // Allow editing metadata (pre-filled with current values)
+        $name = $input->getOption('name');
+        $category = $input->getOption('category');
+        $description = $input->getOption('description');
+        $icon = $input->getOption('icon');
+        $defaultIgAccount = $input->getOption('default-ig-account');
+        $defaultLeadgenMode = $input->getOption('default-leadgen-mode');
+        $defaultSolution = $input->getOption('default-solution');
+
+        // If no flags passed, prompt interactively
+        $hasFlags = $name || $category || $description || $icon || $defaultIgAccount || $defaultLeadgenMode || $defaultSolution;
+
+        if (!$hasFlags) {
+            $name = $io->ask('Name', $existing['name'] ?? '');
+
+            $currentCategory = $existing['category'] ?? 'cold_outreach';
+            $categoryLabels = array_values(self::CATEGORIES);
+            $categoryKeys = array_keys(self::CATEGORIES);
+            $currentIndex = array_search($currentCategory, $categoryKeys);
+            $question = new ChoiceQuestion('Category', $categoryLabels, $currentIndex !== false ? $currentIndex : 0);
+            $selectedLabel = $helper->ask($input, $io, $question);
+            $category = $categoryKeys[array_search($selectedLabel, $categoryLabels)];
+
+            $description = $io->ask('Description', $existing['description'] ?? '');
+        }
+
+        $payload = [];
+        if ($name) {
+            $payload['name'] = $name;
+        }
+        if ($category) {
+            $payload['category'] = $category;
+        }
+        if ($description !== null) {
+            $payload['description'] = $description ?: null;
+        }
+        if ($icon) {
+            $payload['icon'] = $icon;
+        }
+        if ($defaultIgAccount) {
+            $payload['default_ig_account'] = $defaultIgAccount;
+        }
+        if ($defaultLeadgenMode) {
+            $payload['default_leadgen_mode'] = $defaultLeadgenMode;
+        }
+        if ($defaultSolution) {
+            $payload['default_solution'] = $defaultSolution;
+        }
+
+        // Ask about steps if interactive
+        if (!$hasFlags) {
+            $existingSteps = $existing['steps'] ?? [];
+            if (!empty($existingSteps)) {
+                $io->section('Current Steps (' . count($existingSteps) . ')');
+                foreach ($existingSteps as $i => $step) {
+                    $channelLabel = self::CHANNELS[$step['type'] ?? ''] ?? ($step['type'] ?? '-');
+                    $io->text("  <fg=cyan>Step " . ($i + 1) . ":</> {$step['title']} <fg=gray>[{$channelLabel}]</>");
+                }
+                $io->newLine();
+            }
+
+            if ($io->confirm('Edit steps?', false)) {
+                $steps = [];
+                $addMore = true;
+                $stepNum = 1;
+
+                while ($addMore) {
+                    // Pre-fill from existing step if available
+                    $existingStep = $existingSteps[$stepNum - 1] ?? null;
+
+                    $io->text("<fg=cyan>--- Step {$stepNum} ---</>");
+
+                    $stepTitle = $io->ask("Step {$stepNum} title", $existingStep['title'] ?? "Step {$stepNum}");
+
+                    $channelLabels = array_values(self::CHANNELS);
+                    $channelKeys = array_keys(self::CHANNELS);
+                    $currentChannelIndex = $existingStep ? array_search($existingStep['type'] ?? '', $channelKeys) : 0;
+                    $question = new ChoiceQuestion('Channel', $channelLabels, $currentChannelIndex !== false ? $currentChannelIndex : 0);
+                    $selectedLabel = $helper->ask($input, $io, $question);
+                    $stepType = $channelKeys[array_search($selectedLabel, $channelLabels)];
+
+                    $instructions = $io->ask('Script / instructions', $existingStep['instructions'] ?? '');
+                    $delayHours = (int) $io->ask('Delay (hours)', (string) ($existingStep['delay_hours'] ?? 0));
+                    $autoExecute = $io->confirm('Auto-execute?', $existingStep['auto_execute'] ?? false);
+
+                    $step = [
+                        'title'        => $stepTitle,
+                        'type'         => $stepType,
+                        'instructions' => $instructions,
+                        'delay_hours'  => $delayHours,
+                        'auto_execute' => $autoExecute,
+                    ];
+
+                    // Preserve existing step ID for updates
+                    if ($existingStep && isset($existingStep['id'])) {
+                        $step['id'] = $existingStep['id'];
+                    }
+
+                    $steps[] = $step;
+                    $stepNum++;
+
+                    $hasMore = $stepNum <= count($existingSteps);
+                    $addMore = $io->confirm('Add/edit another step?', $hasMore);
+                }
+
+                $payload['steps'] = $steps;
+            }
+        }
+
+        if (empty($payload)) {
+            $io->info('No changes to save.');
+            return Command::SUCCESS;
+        }
+
+        $response = $http->put(self::BASE_PATH . "/{$bloqId}/outreach-strategy-templates/{$id}", $payload);
+        $template = $response['data'] ?? $response;
+
+        $updatedName = $template['name'] ?? $name ?? "#{$id}";
+        $io->success("Strategy \"{$updatedName}\" updated!");
+
+        $io->note("View: php bin/iris outreach:strategy show {$bloqId} {$id}");
 
         return Command::SUCCESS;
     }

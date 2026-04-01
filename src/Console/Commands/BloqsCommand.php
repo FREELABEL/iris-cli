@@ -32,8 +32,8 @@ class BloqsCommand extends Command
     {
         $this
             ->setName('bloqs')
-            ->setAliases(['projects', 'boards'])
-            ->setDescription('Manage bloqs, projects, and boards')
+            ->setAliases(['lexicon', 'projects', 'boards'])
+            ->setDescription('Manage knowledge bases, projects, and boards (Lexicon)')
             ->setHelp('Commands: list, search, show, overview, archive, merge, goals')
             ->addArgument('action', InputArgument::REQUIRED, 'Action: list|search|show|overview|archive|merge|goals')
             ->addArgument('id', InputArgument::OPTIONAL, 'Bloq ID (for show/archive/goals) or search query (for search) or source ID (for merge)')

@@ -21,7 +21,8 @@ class VoiceCommand extends Command
     {
         $this
             ->setName('voice')
-            ->setDescription('Manage agent voice settings')
+            ->setAliases(['echo'])
+            ->setDescription('Manage agent voice settings (Echo)')
             ->setHelp('Configure voice settings for agents using various providers (VAPI, ElevenLabs, Azure, OpenAI, Twilio)')
             ->addArgument('action', InputArgument::OPTIONAL, 'Action: set, get, list, providers, check', 'list')
             ->addOption('agent', 'a', InputOption::VALUE_REQUIRED, 'Agent ID')

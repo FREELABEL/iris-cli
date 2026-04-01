@@ -33,7 +33,8 @@ class PagesCommand extends Command
     {
         $this
             ->setName('pages')
-            ->setDescription('Manage composable landing pages')
+            ->setAliases(['genesis'])
+            ->setDescription('Manage composable landing pages (Genesis)')
             ->setHelp(<<<'HELP'
 Manage composable landing pages with JSON-based components.
 

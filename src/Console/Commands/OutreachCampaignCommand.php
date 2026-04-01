@@ -64,7 +64,8 @@ class OutreachCampaignCommand extends Command
     {
         $this
             ->setName('outreach:campaign')
-            ->setDescription('Manage outreach campaigns')
+            ->setAliases(['reachr:campaign'])
+            ->setDescription('Manage outreach campaigns (Reachr)')
             ->setHelp(<<<'HELP'
 Manage outreach campaigns — create, start, pause, resume, cancel, and track analytics.
 
@@ -117,6 +118,11 @@ HELP
             ->addOption('agent', null, InputOption::VALUE_REQUIRED, 'Agent ID')
             // Schedule option
             ->addOption('at', null, InputOption::VALUE_REQUIRED, 'Schedule datetime (for schedule action)')
+            // Operational config overrides
+            ->addOption('ig-account', null, InputOption::VALUE_REQUIRED, 'Instagram account override')
+            ->addOption('leadgen-mode', null, InputOption::VALUE_REQUIRED, 'Leadgen mode: followers|comments|profiles')
+            ->addOption('leadgen-source-url', null, InputOption::VALUE_REQUIRED, 'Leadgen source URL')
+            ->addOption('solution', null, InputOption::VALUE_REQUIRED, 'Solution key (e.g. ai-courses, creators, dj)')
             // Duplicate option
             ->addOption('new-name', null, InputOption::VALUE_REQUIRED, 'New name for duplication');
     }
@@ -244,6 +250,8 @@ HELP
                 $c['name'] ?? '-',
                 $this->formatStatus($c['status'] ?? 'draft'),
                 self::TYPES[$c['campaign_type'] ?? ''] ?? ($c['campaign_type'] ?? '-'),
+                $c['ig_account'] ?? '-',
+                $c['solution'] ?? '-',
                 $c['total_recipients'] ?? 0,
                 $c['sent_count'] ?? 0,
                 isset($c['progress_percentage']) ? round($c['progress_percentage']) . '%' : '0%',
@@ -251,7 +259,7 @@ HELP
         }
 
         $io->table(
-            ['ID', 'Name', 'Status', 'Type', 'Recipients', 'Sent', 'Progress'],
+            ['ID', 'Name', 'Status', 'Type', 'IG Account', 'Solution', 'Recipients', 'Sent', 'Progress'],
             $rows
         );
 
@@ -289,6 +297,17 @@ HELP
             ['Strategy' => $campaign['strategy_template']['name'] ?? ($campaign['strategy_template_id'] ?? '-')],
             ['Description' => $campaign['description'] ?? '(none)']
         );
+
+        // Resolved operational config
+        $resolvedConfig = $response['resolved_config'] ?? [];
+        if (!empty($resolvedConfig)) {
+            $io->section('Resolved Config');
+            $io->definitionList(
+                ['IG Account' => $resolvedConfig['ig_account'] ?: '(none)'],
+                ['Leadgen Mode' => $resolvedConfig['leadgen_mode'] ?: '(none)'],
+                ['Solution' => $resolvedConfig['solution'] ?: '(none)']
+            );
+        }
 
         // Metrics summary
         $io->section('Metrics');
@@ -424,6 +443,20 @@ HELP
             'broadcast_subject'    => $subject,
             'broadcast_message'    => $message,
         ];
+
+        // Operational config overrides
+        if ($igAccount = $input->getOption('ig-account')) {
+            $payload['ig_account'] = $igAccount;
+        }
+        if ($leadgenMode = $input->getOption('leadgen-mode')) {
+            $payload['leadgen_mode'] = $leadgenMode;
+        }
+        if ($leadgenSourceUrl = $input->getOption('leadgen-source-url')) {
+            $payload['leadgen_source_url'] = $leadgenSourceUrl;
+        }
+        if ($solution = $input->getOption('solution')) {
+            $payload['solution'] = $solution;
+        }
 
         $response = $http->post(self::BASE_PATH, $payload);
         $campaign = $response['campaign'] ?? $response['data'] ?? $response;
