@@ -68,7 +68,8 @@ class OutreachSendCommand extends Command
     {
         $this
             ->setName('outreach:send')
-            ->setDescription('Per-lead outreach — view steps, vary, personalize, copy, send, complete')
+            ->setAliases(['reachr:send'])
+            ->setDescription('Per-lead outreach — view steps, vary, personalize, copy, send, complete (Reachr)')
             ->addArgument('action', InputArgument::OPTIONAL, 'Action: list|show|vary|personalize|copy|open|complete|send|apply|invalid', 'list')
             ->addArgument('lead_id', InputArgument::OPTIONAL, 'Lead ID')
             ->addOption('step', null, InputOption::VALUE_REQUIRED, 'Step number (1-based)')
