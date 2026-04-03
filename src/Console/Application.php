@@ -53,6 +53,7 @@ use IRIS\SDK\Console\Commands\OutreachCampaignCommand;
 use IRIS\SDK\Console\Commands\OutreachSendCommand;
 use IRIS\SDK\Console\Commands\CallCommand;
 use IRIS\SDK\Console\Commands\SomOverviewCommand;
+use IRIS\SDK\Console\Commands\SomEditCommand;
 use IRIS\SDK\Console\Commands\BloqMembersCommand;
 use IRIS\SDK\Console\Commands\MonitorCommand;
 use IRIS\SDK\Console\Commands\InvoicesCommand;
@@ -122,6 +123,7 @@ class Application extends BaseApplication
             new BloqMembersCommand(),
             new OutreachCommand(),
             new SomOverviewCommand(),
+            new SomEditCommand(),
             new OutreachCampaignCommand(),
             new OutreachSendCommand(),
             new CallCommand(),
