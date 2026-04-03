@@ -105,13 +105,19 @@ class AuthManager
      */
     public function getTokenForEndpoint(string $endpoint): string
     {
+        // Use FL-API OAuth token for fl-api endpoints (Passport JWT auth)
+        // The IRIS API key (raw hash) doesn't work for fl-api Passport routes
+        if ($this->config->flApiToken && $this->isFlApiEndpoint($endpoint)) {
+            return $this->config->flApiToken;
+        }
+
         $authStrategy = $this->determineAuthStrategy($endpoint);
 
         switch ($authStrategy) {
             case 'public':
                 // For public routes, still send token if available for better rate limits
                 return $this->userToken ?? '';
-                
+
             case 'user_token':
             default:
                 // Use user token for everything!
@@ -119,6 +125,29 @@ class AuthManager
                     'API token required. Run: ./bin/iris config setup'
                 );
         }
+    }
+
+    /**
+     * Check if an endpoint routes to FL-API (Passport OAuth).
+     */
+    protected function isFlApiEndpoint(string $endpoint): bool
+    {
+        $flApiPatterns = [
+            '/users/', '/user/', '/leads', '/deliverables', '/profile',
+            '/events', '/services', '/integrations', '/cloud-files',
+            '/articles', '/bloqs/', '/programs', '/program-enrollments',
+            '/user-programs', '/courses', '/pages', '/partials', '/videos',
+            '/collections', '/platform', '/a2p/', '/outreach-campaigns',
+            '/calls', '/ai/',
+        ];
+
+        foreach ($flApiPatterns as $pattern) {
+            if (str_contains($endpoint, $pattern)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
