@@ -75,6 +75,7 @@ HELP
             ->addOption('description', null, InputOption::VALUE_REQUIRED, 'Invoice description / notes')
             ->addOption('interval', null, InputOption::VALUE_REQUIRED, 'Subscription interval: week, month, or year')
             ->addOption('fee', null, InputOption::VALUE_REQUIRED, 'Platform fee percentage (e.g. 10 for 10%)')
+            ->addOption('via', null, InputOption::VALUE_REQUIRED, 'Send provider: resend (default), apple-mail, gmail')
             ->addOption('json', null, InputOption::VALUE_NONE, 'Output as JSON')
             ->addOption('api-key', null, InputOption::VALUE_REQUIRED, 'API key override')
             ->addOption('user-id', null, InputOption::VALUE_REQUIRED, 'User ID override');
@@ -114,7 +115,7 @@ HELP
                 'subscribe' => $this->runSubscribe($io, $iris, $input, $id, $jsonOutput),
                 'show'      => $this->runShow($io, $iris, $id, $jsonOutput),
                 'checkout'  => $this->runCheckout($io, $iris, $id, $jsonOutput),
-                'send'      => $this->runSend($io, $iris, $id, $jsonOutput),
+                'send'      => $this->runSend($io, $iris, $input, $id, $jsonOutput),
                 default     => $this->showSubcommandHelp($io),
             };
         } catch (\Exception $e) {
@@ -395,11 +396,20 @@ HELP
         return Command::SUCCESS;
     }
 
-    private function runSend(SymfonyStyle $io, IRIS $iris, int $invoiceId, bool $json): int
+    private function runSend(SymfonyStyle $io, IRIS $iris, InputInterface $input, int $invoiceId, bool $json): int
     {
-        $io->text('<fg=gray>Sending invoice #' . $invoiceId . ' to lead...</>');
+        $provider = $input->getOption('via') ?? 'resend';
+        $providerLabel = match ($provider) {
+            'apple-mail' => 'Apple Mail',
+            'gmail' => 'Gmail',
+            default => 'Resend',
+        };
+
+        $io->text('<fg=gray>Sending invoice #' . $invoiceId . ' via ' . $providerLabel . '...</>');
         $http = $iris->getHttpClient();
-        $response = $http->post("/api/v1/custom-requests/{$invoiceId}/send-reminder");
+        $response = $http->post("/api/v1/custom-requests/{$invoiceId}/send-reminder", [
+            'provider' => $provider,
+        ]);
 
         if ($json) {
             echo json_encode($response, JSON_PRETTY_PRINT) . "\n";
@@ -409,7 +419,7 @@ HELP
         $failed = isset($response['success']) && $response['success'] === false;
 
         if (!$failed) {
-            $io->success('Invoice sent!');
+            $io->success('Invoice sent via ' . $providerLabel . '!');
             $emails = $response['emails'] ?? [];
             if (!empty($emails)) {
                 $io->text('<fg=cyan>Sent to:</> ' . implode(', ', (array) $emails));
