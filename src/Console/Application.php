@@ -52,6 +52,7 @@ use IRIS\SDK\Console\Commands\OutreachCommand;
 use IRIS\SDK\Console\Commands\OutreachCampaignCommand;
 use IRIS\SDK\Console\Commands\OutreachSendCommand;
 use IRIS\SDK\Console\Commands\CallCommand;
+use IRIS\SDK\Console\Commands\SomOverviewCommand;
 use IRIS\SDK\Console\Commands\BloqMembersCommand;
 use IRIS\SDK\Console\Commands\MonitorCommand;
 use IRIS\SDK\Console\Commands\InvoicesCommand;
@@ -64,6 +65,8 @@ use IRIS\SDK\Console\Commands\AtlasOsCommand;
 use IRIS\SDK\Console\Commands\EventsCommand;
 use IRIS\SDK\Console\Commands\ServicesCommand;
 use IRIS\SDK\Console\Commands\RunCommand;
+use IRIS\SDK\Console\Commands\LocaleCommand;
+use IRIS\SDK\Console\Commands\SocialCommand;
 
 class Application extends BaseApplication
 {
@@ -118,6 +121,7 @@ class Application extends BaseApplication
             new BloqsCommand(),
             new BloqMembersCommand(),
             new OutreachCommand(),
+            new SomOverviewCommand(),
             new OutreachCampaignCommand(),
             new OutreachSendCommand(),
             new CallCommand(),
@@ -131,6 +135,8 @@ class Application extends BaseApplication
             new EventsCommand(),
             new ServicesCommand(),
             new RunCommand(),
+            new LocaleCommand(),
+            new SocialCommand(),
         ]);
     }
 
@@ -180,6 +186,12 @@ class Application extends BaseApplication
 <fg=yellow;options=bold>Atlas</> <fg=gray>(Chief of Staff)</>
   <fg=green>atlas</> | <fg=green>atlas-os</>                Inventory, budget, staff, events, calendar
 
+<fg=yellow;options=bold>Locale</> <fg=gray>(Community & Membership)</>
+  <fg=green>locale</> | <fg=green>community</>               Manage communities and memberships
+  <fg=green>locale</> tiers <id>                List membership tiers
+  <fg=green>locale</> members <id>              View member roster
+  <fg=green>locale</> enroll <id>               Enroll a member
+
 <fg=yellow;options=bold>Agents & Workflows</>
   <fg=green>agent</>                            Manage agents
   <fg=green>agent:create</>                     Create a new AI agent
@@ -197,7 +209,10 @@ class Application extends BaseApplication
   <fg=green>profile</>                          Manage user profiles
   <fg=green>marketplace</>                      Browse and publish to marketplace
 
-<fg=yellow;options=bold>Content & Storage</>
+<fg=yellow;options=bold>Content & Social</>
+  <fg=green>social</> publish                    Publish photos, videos, or text to social media
+  <fg=green>social</> status <id>                Check async upload status
+  <fg=green>social</> history                    View publishing history
   <fg=green>cloud-upload</>                     Upload files to cloud storage
   <fg=green>deliver</>                          Deliver content to leads
   <fg=green>diary</>                            Daily diary and notes
