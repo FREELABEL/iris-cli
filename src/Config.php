@@ -35,6 +35,12 @@ class Config
     public string $flApiUrl = 'https://apiv2.heyiris.io';
 
     /**
+     * OAuth Bearer token for FL-API (Passport).
+     * If set, used instead of apiKey for fl-api endpoints.
+     */
+    public ?string $flApiToken = null;
+
+    /**
      * Request timeout in seconds
      */
     public int $timeout = 30;
@@ -127,6 +133,7 @@ class Config
         $this->webhookSecret = $options['webhook_secret'] ?? null;
         $this->clientId = $options['client_id'] ?? null;
         $this->clientSecret = $options['client_secret'] ?? null;
+        $this->flApiToken = $options['fl_api_token'] ?? null;
         $this->debug = $options['debug'] ?? false;
         $this->pollingInterval = $options['polling_interval'] ?? $this->pollingInterval;
         $this->maxPollingDuration = $options['max_polling_duration'] ?? $this->maxPollingDuration;
@@ -207,6 +214,11 @@ class Config
                 $config['fl_api_url'] = $env['FL_API_URL'] ?? $env['IRIS_API_URL'] ?? 'https://apiv2.heyiris.io';
             }
             
+            // FL-API OAuth token (Passport JWT — different from IRIS API key)
+            if (!empty($env['FL_API_TOKEN'])) {
+                $config['fl_api_token'] = $env['FL_API_TOKEN'];
+            }
+
             // Optional fields
             if (!empty($env['IRIS_CLIENT_ID'])) {
                 $config['client_id'] = $env['IRIS_CLIENT_ID'];

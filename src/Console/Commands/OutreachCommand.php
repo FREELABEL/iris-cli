@@ -252,7 +252,8 @@ HELP
         }
 
         $response = $http->get(self::BASE_PATH . "/{$bloqId}/outreach-strategy-templates", $query);
-        $templates = $response['data']['templates'] ?? $response['data'] ?? [];
+        // parseResponse unwraps data.X → X, so templates are at $response['templates']
+        $templates = $response['templates'] ?? $response['data']['templates'] ?? $response['data'] ?? [];
 
         if ($input->getOption('json')) {
             $io->writeln(json_encode($templates, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
