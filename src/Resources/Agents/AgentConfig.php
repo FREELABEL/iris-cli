@@ -42,6 +42,7 @@ class AgentConfig
         ],
         public array $capabilities = [],
         public bool $isPublic = false,
+        public ?string $description = null,
     ) {
         $this->validateModel();
         $this->validateType();
@@ -55,6 +56,7 @@ class AgentConfig
         return array_filter([
             'name' => $this->name,
             'prompt' => $this->prompt,
+            'description' => $this->description,
             'type' => $this->type,
             'model' => $this->model,
             'integrations' => $this->integrations,
