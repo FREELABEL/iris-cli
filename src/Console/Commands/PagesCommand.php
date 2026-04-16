@@ -489,6 +489,22 @@ HELP
         $response = $iris->pages->getBySlug($slug, false);
         $page = $response['data'] ?? $response;
 
+        // Detect JSON format:
+        // Format A (pulled): { "id": ..., "slug": ..., "json_content": { "version": ..., "components": [...] } }
+        // Format B (direct): { "version": ..., "type": ..., "components": [...] }
+        if (isset($localJson['json_content'])) {
+            // Format A — pulled from API, json_content is nested
+            $jsonContent = $localJson['json_content'];
+        } elseif (isset($localJson['components'])) {
+            // Format B — file IS the json_content directly
+            $jsonContent = $localJson;
+            // Clear metadata keys that aren't part of json_content
+            $localJson = [];
+        } else {
+            $io->error("No 'json_content' or 'components' found in {$filePath}. Cannot determine page content.");
+            return Command::FAILURE;
+        }
+
         // Build update payload
         $updateData = [];
         if (isset($localJson['title'])) {
@@ -503,13 +519,11 @@ HELP
         if (isset($localJson['og_image'])) {
             $updateData['og_image'] = $localJson['og_image'];
         }
-        if (isset($localJson['json_content'])) {
-            $updateData['json_content'] = $localJson['json_content'];
-        }
+        $updateData['json_content'] = $jsonContent;
 
         $result = $iris->pages->update($page['id'], $updateData);
 
-        $componentCount = count($localJson['json_content']['components'] ?? []);
+        $componentCount = count($jsonContent['components'] ?? []);
         $io->success("Pushed '{$slug}' from {$filePath} ({$componentCount} components)");
         $io->note("A new version has been created. Use 'pages versions {$slug}' to see history.");
 
@@ -734,7 +748,7 @@ HELP
         $io->text("<fg=gray>API: {$baseUrl}</>");
 
         $response = $iris->pages->list();
-        $pages = $response['data'] ?? [];
+        $pages = $response['data']['data'] ?? $response['data'] ?? [];
 
         // Filter by page template type if --page-type is set
         $pageType = $input->getOption('page-type');
@@ -782,15 +796,36 @@ HELP
     {
         $io->title('Create New Page');
 
-        // Get basic info
-        $slug = $input->getOption('slug') ?? $io->ask('Page slug (URL-friendly)', 'my-page');
-        $title = $input->getOption('title') ?? $io->ask('Page title', 'My Landing Page');
-        $seoTitle = $input->getOption('seo-title') ?? $io->ask('SEO title (optional)', $title);
-        $seoDescription = $input->getOption('seo-description') ?? $io->ask('SEO description (optional)');
+        // Determine if we can run interactively
+        $isInteractive = $input->isInteractive();
+        $hasSlugOption = (bool) $input->getOption('slug');
+        $hasTitleOption = (bool) $input->getOption('title');
 
-        // Ask about template
+        // Get basic info — skip prompts when options are provided or non-interactive
+        if ($hasSlugOption) {
+            $slug = $input->getOption('slug');
+        } elseif ($isInteractive) {
+            $slug = $io->ask('Page slug (URL-friendly)', 'my-page');
+        } else {
+            $io->error('--slug is required in non-interactive mode.');
+            return Command::FAILURE;
+        }
+
+        if ($hasTitleOption) {
+            $title = $input->getOption('title');
+        } elseif ($isInteractive) {
+            $title = $io->ask('Page title', 'My Landing Page');
+        } else {
+            $io->error('--title is required in non-interactive mode.');
+            return Command::FAILURE;
+        }
+
+        $seoTitle = $input->getOption('seo-title') ?? ($isInteractive ? $io->ask('SEO title (optional)', $title) : $title);
+        $seoDescription = $input->getOption('seo-description') ?? ($isInteractive ? $io->ask('SEO description (optional)') : null);
+
+        // Ask about template — skip interactive prompt when in non-interactive mode
         $template = $input->getOption('template');
-        if (!$template) {
+        if (!$template && $isInteractive) {
             $helper = $this->getHelper('question');
             $question = new ChoiceQuestion(
                 'Choose a template (or skip to build custom)',
@@ -817,18 +852,18 @@ HELP
                 'status' => 'draft',
             ]);
         } else {
-            // Interactive component builder
+            // Interactive component builder — only prompt if interactive, otherwise use flags
             $components = [];
 
-            if ($input->getOption('add-hero') || $io->confirm('Add Hero section?', true)) {
+            if ($input->getOption('add-hero') || ($isInteractive && $io->confirm('Add Hero section?', true))) {
                 $components[] = $this->buildHeroComponent($io, $input);
             }
 
-            if ($input->getOption('add-text') || $io->confirm('Add Text block?', true)) {
+            if ($input->getOption('add-text') || ($isInteractive && $io->confirm('Add Text block?', true))) {
                 $components[] = $this->buildTextComponent($io, $input);
             }
 
-            if ($input->getOption('add-button') || $io->confirm('Add CTA button?', false)) {
+            if ($input->getOption('add-button') || ($isInteractive && $io->confirm('Add CTA button?', false))) {
                 $components[] = $this->buildButtonComponent($io, $input);
             }
 
@@ -851,21 +886,22 @@ HELP
         }
 
         $pageData = $page['data'] ?? $page;
-        $publicUrl = $this->getPublicUrl($pageData['slug']);
+        $pageSlug = $pageData['slug'] ?? $slug;
+        $publicUrl = $this->getPublicUrl($pageSlug);
         $io->success("Page created successfully!");
         $io->definitionList(
-            ['ID' => $pageData['id']],
-            ['Slug' => $pageData['slug']],
-            ['Title' => $pageData['title']],
-            ['Status' => $pageData['status']],
+            ['ID' => $pageData['id'] ?? 'N/A'],
+            ['Slug' => $pageSlug],
+            ['Title' => $pageData['title'] ?? $title],
+            ['Status' => $pageData['status'] ?? 'draft'],
             ['Components' => count($pageData['json_content']['components'] ?? [])],
             ['URL' => $publicUrl]
         );
 
         $io->note([
             "URL: {$publicUrl}",
-            "View: ./bin/iris pages view {$pageData['slug']}",
-            "Publish: ./bin/iris pages publish {$pageData['slug']}",
+            "View: ./bin/iris pages view {$pageSlug}",
+            "Publish: ./bin/iris pages publish {$pageSlug}",
         ]);
 
         return Command::SUCCESS;
@@ -1524,6 +1560,7 @@ HELP
             'ScatteredImageHero' => ['heading', 'subheading', 'images', 'accentColor', 'themeMode'],
             'ServiceListing' => ['heading', 'subheading', 'services', 'accentColor', 'themeMode'],
             'PricingRows' => ['heading', 'subheading', 'rows', 'accentColor', 'themeMode'],
+            'PricingTiers' => ['heading', 'subheading', 'plans', 'addOns', 'showToggle', 'accentColor', 'themeMode'],
 
             // Preline-Inspired Components (Batch 2)
             'TestimonialsSection' => ['heading', 'subheading', 'testimonials', 'layout', 'columns', 'accentColor', 'themeMode'],
@@ -1597,6 +1634,12 @@ HELP
             'WidgetStatsRow' => ['stats', 'columns', 'themeMode'],
             'WidgetTeamGrid' => ['title', 'columns', 'members', 'themeMode'],
             'WidgetWorkspaceBanner' => ['title', 'subtitle', 'avatarUrl', 'avatarInitials', 'backgroundStyle', 'backgroundImageUrl', 'showDate', 'themeMode'],
+
+            // Preline Agency-Inspired Components
+            'AgencyHero' => ['preHeadline', 'headline', 'headlineAccent', 'description', 'ctas', 'accentColor', 'themeMode', 'size', 'align'],
+            'ValuePillars' => ['heading', 'subheading', 'pillars', 'columns', 'accentColor', 'themeMode'],
+            'ProcessTimeline' => ['heading', 'subheading', 'steps', 'accentColor', 'themeMode'],
+            'LeadershipGrid' => ['heading', 'subheading', 'leaders', 'columns', 'accentColor', 'themeMode'],
         ];
     }
 
@@ -2403,6 +2446,7 @@ HELP
                 'LogoMarquee' => 'logos', 'MapSection' => 'locations',
                 'TimelineCarousel' => 'items', 'BlogGrid' => 'items', 'ServiceListing' => 'services',
                 'CareersListing' => 'jobs', 'FeatureShowcase' => 'features', 'ClientGrid' => 'clients',
+                'AgencyHero' => 'ctas', 'ValuePillars' => 'pillars', 'ProcessTimeline' => 'steps', 'LeadershipGrid' => 'leaders',
             ];
 
             if (isset($arrayProps[$type])) {
