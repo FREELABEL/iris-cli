@@ -62,6 +62,9 @@ class PagesResource
      */
     public function list(array $params = []): array
     {
+        if (!isset($params['per_page'])) {
+            $params['per_page'] = 200;
+        }
         return $this->http->get('/api/v1/pages', $params);
     }
 
