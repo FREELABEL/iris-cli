@@ -122,7 +122,9 @@ HELP
             ->addOption('title', null, InputOption::VALUE_REQUIRED, 'Page title')
             ->addOption('seo-title', null, InputOption::VALUE_REQUIRED, 'SEO title')
             ->addOption('seo-description', null, InputOption::VALUE_REQUIRED, 'SEO description')
-            ->addOption('template', null, InputOption::VALUE_REQUIRED, 'Template: landing, product, about, contact')
+            ->addOption('template', null, InputOption::VALUE_REQUIRED, 'Template: landing, product, about, contact, html')
+            ->addOption('html-file', null, InputOption::VALUE_REQUIRED, 'Path to a raw HTML file (with --template=html — bespoke page)')
+            ->addOption('css-file', null, InputOption::VALUE_REQUIRED, 'Path to a CSS file (optional, with --template=html)')
             ->addOption('status', null, InputOption::VALUE_REQUIRED, 'Status: draft, published, archived', 'draft')
             ->addOption('new-slug', null, InputOption::VALUE_REQUIRED, 'New slug for duplication')
             ->addOption('page-version', null, InputOption::VALUE_REQUIRED, 'Version number for rollback')
@@ -859,6 +861,28 @@ HELP
         // Create from template or custom
         if ($template === 'event') {
             $page = $this->createEventFromCli($iris, $io, $input, $slug, $title, $seoTitle, $seoDescription);
+        } elseif ($template === 'html') {
+            // Bespoke page: store raw author HTML via render_mode=html (trusted owners only,
+            // enforced server-side). Renders without the Vue SPA. Lane 1.
+            $htmlFile = $input->getOption('html-file');
+            $html = ($htmlFile && is_file($htmlFile))
+                ? file_get_contents($htmlFile)
+                : '<section style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0a0a;color:#fff;font-family:system-ui"><h1 style="font-size:3rem;font-weight:800">' . htmlspecialchars($title) . '</h1></section>';
+            $cssFile = $input->getOption('css-file');
+            $css = ($cssFile && is_file($cssFile)) ? file_get_contents($cssFile) : '';
+            $page = $iris->pages->create([
+                'slug' => $slug,
+                'title' => $title,
+                'seo_title' => $seoTitle,
+                'seo_description' => $seoDescription,
+                'status' => 'draft',
+                'json_content' => [
+                    'render_mode' => 'html',
+                    'html' => $html,
+                    'css' => $css,
+                    'theme' => ['mode' => 'dark'],
+                ],
+            ]);
         } elseif ($template) {
             $page = $iris->pages->createFromTemplate($template, [
                 'slug' => $slug,
