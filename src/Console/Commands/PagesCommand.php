@@ -796,8 +796,15 @@ HELP
     {
         $io->title('Create New Page');
 
-        // Determine if we can run interactively
+        // Determine if we can run interactively. Harden against false-positive interactivity:
+        // when STDIN is not a real TTY (piped/scripted), force non-interactive so we never enter
+        // an unanswerable prompt that crashes with "Value 0 is invalid" (bug #137401).
         $isInteractive = $input->isInteractive();
+        $stdinIsTty = \defined('STDIN') && \function_exists('stream_isatty') ? @stream_isatty(STDIN) : true;
+        if ($isInteractive && !$stdinIsTty) {
+            $isInteractive = false;
+            $input->setInteractive(false);
+        }
         $hasSlugOption = (bool) $input->getOption('slug');
         $hasTitleOption = (bool) $input->getOption('title');
 
@@ -836,6 +843,15 @@ HELP
             if ($template === 'Skip (custom)') {
                 $template = null;
             }
+        }
+
+        // Non-interactive with no template and no component flags → default to a usable landing
+        // template instead of producing an empty page or entering the wizard (bug #137401).
+        if (!$template && !$isInteractive
+            && !$input->getOption('add-hero')
+            && !$input->getOption('add-text')
+            && !$input->getOption('add-button')) {
+            $template = 'landing';
         }
 
         $io->section('Building page...');
@@ -1634,12 +1650,18 @@ HELP
             'WidgetStatsRow' => ['stats', 'columns', 'themeMode'],
             'WidgetTeamGrid' => ['title', 'columns', 'members', 'themeMode'],
             'WidgetWorkspaceBanner' => ['title', 'subtitle', 'avatarUrl', 'avatarInitials', 'backgroundStyle', 'backgroundImageUrl', 'showDate', 'themeMode'],
+            'AnalyticsDashboard' => ['prefix', 'title', 'subtitle', 'accentColor', 'themeMode', 'refreshInterval'],
 
             // Preline Agency-Inspired Components
             'AgencyHero' => ['preHeadline', 'headline', 'headlineAccent', 'description', 'ctas', 'accentColor', 'themeMode', 'size', 'align'],
             'ValuePillars' => ['heading', 'subheading', 'pillars', 'columns', 'accentColor', 'themeMode'],
             'ProcessTimeline' => ['heading', 'subheading', 'steps', 'accentColor', 'themeMode'],
             'LeadershipGrid' => ['heading', 'subheading', 'leaders', 'columns', 'accentColor', 'themeMode'],
+
+            // Preline-Inspired Components (Batch 4)
+            'ApproachTimeline' => ['heading', 'subheading', 'stepsLabel', 'steps', 'imageUrl', 'imageAlt', 'ctaText', 'ctaUrl', 'ctaIcon', 'accentColor', 'themeMode', 'backgroundColor'],
+            'IconFeatureGrid' => ['heading', 'subheading', 'imageUrl', 'imageAlt', 'features', 'columns', 'accentColor', 'themeMode', 'backgroundColor'],
+            'FeatureShowcaseGrid' => ['cards', 'columns', 'themeMode', 'backgroundColor'],
         ];
     }
 
