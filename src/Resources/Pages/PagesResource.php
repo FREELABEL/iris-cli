@@ -99,6 +99,29 @@ class PagesResource
     }
 
     /**
+     * Fetch the Genesis component catalog — the authoritative type→prop-schema
+     * registry (same one the push validator uses). Public, read-only.
+     *
+     * @param string|null $search Optional case-insensitive filter on component type name
+     * @return array{count:int, components:array<string,array>, showcase_url:string}
+     */
+    public function catalog(?string $search = null): array
+    {
+        return $this->http->get('/api/v1/public/genesis/components', $search ? ['search' => $search] : []);
+    }
+
+    /**
+     * Fetch one Genesis component's prop schema by type (case-insensitive).
+     *
+     * @param string $type Component type, e.g. "Hero"
+     * @return array{type:string, props:array, required:array, prop_count:int}
+     */
+    public function component(string $type): array
+    {
+        return $this->http->get('/api/v1/public/genesis/components/' . rawurlencode($type));
+    }
+
+    /**
      * Create a new page.
      *
      * @param array{
