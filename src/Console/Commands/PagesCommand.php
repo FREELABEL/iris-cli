@@ -38,6 +38,21 @@ class PagesCommand extends Command
             ->setHelp(<<<'HELP'
 Manage composable landing pages with JSON-based components.
 
+TWO WAYS TO BUILD A PAGE (pick per page — they can coexist):
+  1. BESPOKE (raw HTML/CSS) — full design freedom. Best for landing/marketing/hero pages.
+       pages create --slug=x --title="X" --template=html --html-file=page.html --css-file=page.css
+     Served as raw HTML, bypassing the Vue SPA. Trusted owners only. Animations, custom layout — go crazy.
+     Live example:  https://heyiris.io/p/bounty-os-bespoke
+
+  2. COMPOSABLE (Genesis components) — the pre-built component registry. Best for dashboards/apps (the moat).
+     Pages are an array of typed components (Hero, BenefitsSection, StatsCounter, DataTable, CustomHtml, ...),
+     each with a locked prop schema. Push is rejected if a component type or prop is invalid.
+       SEE EVERY AVAILABLE COMPONENT LIVE:  https://heyiris.io/p/component-showcase
+       Example registry page:               https://heyiris.io/p/genesis
+     Need a raw block inside a composable page? Use the `CustomHtml` component (trusted owners only).
+
+  Rule of thumb: landing pages → bespoke (Lane 1); dashboards/apps → composable (Lane 2).
+
 Usage:
   pages                                              List all pages
   pages create                                       Interactive page creation
@@ -67,6 +82,13 @@ Pull/Push (local file workflow):
   pages push <slug>                                  Upload ./pages/<slug>.json to API
   pages diff <slug>                                  Compare local file vs remote
   pages sync <slug>                                  Pull remote, diff, and push local changes
+
+Component Catalog (Lane 2 — the composable registry, pulled live from the API):
+  pages catalog                                      List EVERY available component + prop count
+  pages catalog <Component>                          Show one component's full prop schema (required/optional, enums)
+  pages catalog --search=grid                        Filter the catalog by name
+  pages catalog --json                               Raw JSON (for agents/tooling)
+  See them rendered:                                 https://heyiris.io/p/component-showcase
 
 Component Management:
   pages components <slug>                            List components
@@ -108,7 +130,7 @@ Environment:
   pages list --env=local                             Target local API
 HELP
             )
-            ->addArgument('action', InputArgument::OPTIONAL, 'Action: list, create, view, validate, audit, brand, set, get, pull, push, diff, publish, unpublish, delete, duplicate, versions, rollback, components, add-component, update-component, remove-component, ai-edit, analytics, submissions, checkout, monetize, compose, thumbnail, domains')
+            ->addArgument('action', InputArgument::OPTIONAL, 'Action: list, create, view, validate, audit, brand, set, get, pull, push, diff, publish, unpublish, delete, duplicate, versions, rollback, catalog, components, add-component, update-component, remove-component, ai-edit, analytics, submissions, checkout, monetize, compose, thumbnail, domains')
             ->addArgument('slug', InputArgument::OPTIONAL, 'Page slug')
             ->addArgument('path', InputArgument::OPTIONAL, 'Dot-notation path (for set/get)')
             ->addArgument('value', InputArgument::OPTIONAL, 'Value to set (for set)')
@@ -139,6 +161,7 @@ HELP
             ->addOption('add-button', null, InputOption::VALUE_NONE, 'Add a ButtonCTA component')
             ->addOption('component-id', null, InputOption::VALUE_REQUIRED, 'Component ID for update/remove')
             ->addOption('type', null, InputOption::VALUE_REQUIRED, 'Component type: Hero, TextBlock, ButtonCTA')
+            ->addOption('search', null, InputOption::VALUE_REQUIRED, 'Filter the component catalog by name (for the catalog action)')
             ->addOption('position', null, InputOption::VALUE_REQUIRED, 'Position to insert component (0-based index)')
             ->addOption('props', null, InputOption::VALUE_REQUIRED, 'Component props as JSON string')
             // Brand options
@@ -288,6 +311,10 @@ HELP
 
                 case 'components':
                     return $this->listComponents($iris, $io, $slug);
+
+                case 'catalog':
+                case 'library':
+                    return $this->componentCatalog($iris, $io, $input, $slug);
 
                 case 'add-component':
                     return $this->addComponent($iris, $io, $input, $slug);
@@ -1390,6 +1417,82 @@ HELP
         $io->text([
             '',
             "Update a component: ./bin/iris pages set {$slug} \"components.<index>.props.<key>\" \"<value>\"",
+        ]);
+
+        return Command::SUCCESS;
+    }
+
+    /**
+     * Genesis component catalog — the authoritative registry of composable
+     * components and their prop schemas (Lane 2). Pulled live from the API so
+     * the list is always in sync with what `push` will accept.
+     *
+     *   pages catalog                 List every component type (+ prop count)
+     *   pages catalog Hero            Show one component's full prop schema
+     *   pages catalog --search=grid   Filter the list by name
+     *   pages catalog --json          Raw JSON (for tooling/agents)
+     */
+    private function componentCatalog(IRIS $iris, SymfonyStyle $io, InputInterface $input, ?string $type): int
+    {
+        $asJson = (bool) $input->getOption('json');
+
+        // Drill into a single component's schema.
+        if ($type) {
+            $data = $iris->pages->component($type);
+
+            if (!empty($data['error'])) {
+                $io->error($data['error']);
+                $io->text("List all: ./bin/iris pages catalog");
+                return Command::FAILURE;
+            }
+
+            if ($asJson) {
+                $io->writeln(json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                return Command::SUCCESS;
+            }
+
+            $io->title("Genesis component: {$data['type']}");
+            $rows = [];
+            foreach (($data['props'] ?? []) as $prop => $rule) {
+                $isReq = is_string($rule) && str_contains($rule, 'required');
+                $rows[] = [$prop, $isReq ? 'yes' : '', (string) $rule];
+            }
+            $io->table(['Prop', 'Required', 'Rule'], $rows);
+            $io->text([
+                "Props: {$data['prop_count']}  |  Required: " . implode(', ', $data['required'] ?? []) ?: 'none',
+                "Use in a page:  ./bin/iris pages add-component <slug> --type={$data['type']} --props='{...}'",
+            ]);
+            return Command::SUCCESS;
+        }
+
+        // List the whole catalog.
+        $search = $input->getOption('search') ?: null;
+        $data = $iris->pages->catalog($search);
+        $components = $data['components'] ?? [];
+
+        if ($asJson) {
+            $io->writeln(json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            return Command::SUCCESS;
+        }
+
+        $io->title('Genesis Component Catalog' . ($search ? " (filter: \"{$search}\")" : ''));
+        if (empty($components)) {
+            $io->warning($search ? "No components match \"{$search}\"." : 'No components returned.');
+            return Command::SUCCESS;
+        }
+
+        $rows = [];
+        foreach ($components as $name => $meta) {
+            $reqCount = count($meta['required'] ?? []);
+            $rows[] = [$name, $meta['prop_count'] ?? 0, $reqCount];
+        }
+        $io->table(['Component', 'Props', 'Required'], $rows);
+
+        $io->text([
+            "{$data['count']} components available.",
+            "Inspect one:   ./bin/iris pages catalog <Component>",
+            "See them live: " . ($data['showcase_url'] ?? 'https://heyiris.io/p/component-showcase'),
+            "Bespoke page:  ./bin/iris pages create --template=html --html-file=page.html",
         ]);
 
         return Command::SUCCESS;
