@@ -51,6 +51,7 @@ use IRIS\SDK\Console\Commands\BloqsCommand;
 use IRIS\SDK\Console\Commands\OutreachCommand;
 use IRIS\SDK\Console\Commands\OutreachCampaignCommand;
 use IRIS\SDK\Console\Commands\OutreachSendCommand;
+use IRIS\SDK\Console\Commands\DomainsCommand;
 use IRIS\SDK\Console\Commands\CallCommand;
 use IRIS\SDK\Console\Commands\SomOverviewCommand;
 use IRIS\SDK\Console\Commands\SomEditCommand;
@@ -68,6 +69,12 @@ use IRIS\SDK\Console\Commands\ServicesCommand;
 use IRIS\SDK\Console\Commands\RunCommand;
 use IRIS\SDK\Console\Commands\LocaleCommand;
 use IRIS\SDK\Console\Commands\SocialCommand;
+use IRIS\SDK\Console\Commands\LeadsMeetingCommand;
+use IRIS\SDK\Console\Commands\PagesBatchCommand;
+use IRIS\SDK\Console\Commands\AtlasMeetingsCommand;
+use IRIS\SDK\Console\Commands\AtlasBrandKitCommand;
+use IRIS\SDK\Console\Commands\AtlasPublishCommand;
+use IRIS\SDK\Console\Commands\DocsCommand;
 
 class Application extends BaseApplication
 {
@@ -76,6 +83,7 @@ class Application extends BaseApplication
         parent::__construct('IRIS SDK', '1.0.0');
 
         $this->addCommands([
+            new AtlasPublishCommand(),
             new SetupCommand(),
             new MarketplaceCommand(),
             new SDKCommand(),
@@ -126,6 +134,7 @@ class Application extends BaseApplication
             new SomEditCommand(),
             new OutreachCampaignCommand(),
             new OutreachSendCommand(),
+            new DomainsCommand(),
             new CallCommand(),
             new MonitorCommand(),
             new PackagesCommand(),
@@ -139,6 +148,11 @@ class Application extends BaseApplication
             new RunCommand(),
             new LocaleCommand(),
             new SocialCommand(),
+            new LeadsMeetingCommand(),
+            new PagesBatchCommand(),
+            new AtlasMeetingsCommand(),
+            new AtlasBrandKitCommand(),
+            new DocsCommand(),
         ]);
     }
 
