@@ -35,7 +35,7 @@ class BloqsCommand extends Command
             ->setAliases(['lexicon', 'projects', 'boards'])
             ->setDescription('Manage knowledge bases, projects, and boards (Lexicon)')
             ->setHelp('Commands: list, search, show, overview, archive, merge, goals')
-            ->addArgument('action', InputArgument::REQUIRED, 'Action: list|search|show|overview|archive|merge|goals')
+            ->addArgument('action', InputArgument::REQUIRED, 'Action: list|search|show|overview|archive|merge|goals|lists|item-add')
             ->addArgument('id', InputArgument::OPTIONAL, 'Bloq ID (for show/archive/goals) or search query (for search) or source ID (for merge)')
             ->addArgument('extra', InputArgument::OPTIONAL, 'Target bloq ID (for merge) or goal text (for goals --add)')
             ->addOption('add', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Add goal(s) — repeatable (for goals action)')
@@ -44,6 +44,9 @@ class BloqsCommand extends Command
             ->addOption('industry', null, InputOption::VALUE_REQUIRED, 'Set industry (for goals action)')
             ->addOption('audience', null, InputOption::VALUE_REQUIRED, 'Set target audience (for goals action)')
             ->addOption('summary', null, InputOption::VALUE_REQUIRED, 'Set business summary (for goals action)')
+            ->addOption('title', null, InputOption::VALUE_REQUIRED, 'Item title (for item-add)')
+            ->addOption('content', null, InputOption::VALUE_REQUIRED, 'Item body (for item-add)')
+            ->addOption('file', null, InputOption::VALUE_REQUIRED, 'Read the body from a file (for item-add)')
             ->addOption('limit', 'l', InputOption::VALUE_REQUIRED, 'Max results', '50')
             ->addOption('json', null, InputOption::VALUE_NONE, 'Output as JSON')
             ->addOption('api-key', null, InputOption::VALUE_REQUIRED, 'API key')
@@ -67,6 +70,12 @@ class BloqsCommand extends Command
             $iris = new IRIS($configOptions);
 
             switch ($action) {
+                case 'lists':
+                    return $this->showLists($io, $iris, $input);
+
+                case 'item-add':
+                    return $this->addItem($io, $iris, $input);
+
                 case 'list':
                 case 'ls':
                     return $this->listBloqs($iris, $input, $io);
@@ -745,5 +754,77 @@ class BloqsCommand extends Command
         }
 
         $table->render();
+    }
+
+    /**
+     * Show the lists inside a bloq, with their ids.
+     *
+     * You need a list id to write anything, and there was no way to get one from the CLI —
+     * which is most of why writing felt impossible when the API supported it all along.
+     */
+    private function showLists($io, $iris, $input): int
+    {
+        $bloqId = (int) $input->getArgument('id');
+        if (!$bloqId) {
+            $io->error('Need a bloq id: iris bloqs lists 612');
+            return 1;
+        }
+
+        $lists = $iris->bloqs->lists($bloqId)->all();
+        $rows = [];
+        foreach ($lists as $l) {
+            $arr = is_array($l) ? $l : (array) $l;
+            $rows[] = [
+                $arr['id'] ?? '?',
+                $arr['name'] ?? ($arr['title'] ?? '?'),
+                $arr['item_count'] ?? (isset($arr['items']) && is_array($arr['items']) ? count($arr['items']) : 0),
+            ];
+        }
+
+        if ($input->getOption('json')) {
+            $io->writeln(json_encode($rows, JSON_PRETTY_PRINT));
+            return 0;
+        }
+
+        $io->table(['List ID', 'Name', 'Items'], $rows);
+        $io->writeln('  Write into one with: iris bloqs item-add <listId> --title="..." --file=notes.md');
+
+        return 0;
+    }
+
+    /**
+     * Write an item into a list.
+     *
+     * --file rather than only --content, because the body is usually prose and prose in a
+     * shell argument is one apostrophe away from failing. A path has no such problem.
+     */
+    private function addItem($io, $iris, $input): int
+    {
+        $listId = (int) $input->getArgument('id');
+        $title = $input->getOption('title');
+        if (!$listId || !$title) {
+            $io->error('Need a list id and --title: iris bloqs item-add 2096 --title="..." --file=notes.md');
+            return 1;
+        }
+
+        $content = (string) $input->getOption('content');
+        if ($file = $input->getOption('file')) {
+            if (!is_readable($file)) {
+                $io->error("Cannot read {$file}");
+                return 1;
+            }
+            $content = file_get_contents($file);
+        }
+
+        $item = $iris->bloqs->items($listId)->create([
+            'title' => $title,
+            'content' => $content,
+            'type' => 'default',
+        ]);
+
+        $id = is_array($item) ? ($item['id'] ?? '?') : ($item->id ?? '?');
+        $io->success("Wrote item {$id} to list {$listId} (" . strlen($content) . ' chars).');
+
+        return 0;
     }
 }
